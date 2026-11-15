@@ -159,7 +159,7 @@ final class SiegeHolds {
             for (ArmySquad squad : ArmyWork.state(server).squadsOf(attacker)) {
                 Optional<WorldPos> anchor = squad.order().anchor();
                 Order.Kind kind = squad.order().kind();
-                if (anchor.isEmpty() || ArmyWork.hasBodies(squad) || squad.members().isEmpty()
+                if (anchor.isEmpty() || !ArmyWork.fightsAbstractly(squad) || squad.members().isEmpty()
                         || (kind != Order.Kind.HOLD && kind != Order.Kind.GUARD && kind != Order.Kind.SIEGE)) {
                     continue;
                 }
@@ -351,9 +351,9 @@ final class SiegeHolds {
         int soldiers = 0;
         for (UUID attacker : attackers) {
             for (ArmySquad squad : ArmyWork.state(server).squadsOf(attacker)) {
-                if (squad.order().kind() == Order.Kind.SIEGE && !ArmyWork.hasBodies(squad)
+                if (squad.order().kind() == Order.Kind.SIEGE && ArmyWork.fightsAbstractly(squad)
                         && near(squad.order().points().get(0), seat, reach(server, seat))) {
-                    soldiers += squad.members().size();
+                    soldiers += ArmyWork.bodiless(squad);
                 }
             }
         }
@@ -368,7 +368,7 @@ final class SiegeHolds {
             for (ArmySquad squad : ArmyWork.state(server).squadsOf(defender)) {
                 Order.Kind kind = squad.order().kind();
                 if ((kind == Order.Kind.DEFEND || kind == Order.Kind.HOLD || kind == Order.Kind.GUARD) && !squad.members().isEmpty()
-                        && !ArmyWork.hasBodies(squad)) {
+                        && ArmyWork.fightsAbstractly(squad)) {
                     WorldPos at = squad.order().points().get(0);
                     if (at.dimension().equals(dimension) && Math.abs(at.x() - x) <= reach && Math.abs(at.z() - z) <= reach) {
                         return true;
@@ -443,7 +443,7 @@ final class SiegeHolds {
             for (ArmySquad squad : ArmyWork.state(server).squadsOf(attacker)) {
                 Order.Kind kind = squad.order().kind();
                 if ((kind != Order.Kind.HOLD && kind != Order.Kind.GUARD && kind != Order.Kind.SIEGE) || squad.members().isEmpty()
-                        || ArmyWork.hasBodies(squad) || !ArmyField.arrived(server, squad)) {
+                        || !ArmyWork.fightsAbstractly(squad) || !ArmyField.arrived(server, squad)) {
                     continue;
                 }
                 WorldPos at = ArmyField.positionOf(server, squad);
@@ -639,7 +639,7 @@ final class SiegeHolds {
             for (ArmySquad squad : ArmyWork.state(server).squadsOf(kingdom)) {
                 Order.Kind kind = squad.order().kind();
                 if ((kind != Order.Kind.DEFEND && kind != Order.Kind.HOLD && kind != Order.Kind.GUARD) || squad.members().isEmpty()
-                        || ArmyWork.hasBodies(squad)) {
+                        || !ArmyWork.fightsAbstractly(squad)) {
                     continue;
                 }
                 WorldPos at = ArmyField.positionOf(server, squad);
@@ -700,7 +700,7 @@ final class SiegeHolds {
         ArmySquad best = squads.get(0);
         double bestPower = -1.0;
         for (ArmySquad squad : squads) {
-            double power = ArmyWork.power(server, squad);
+            double power = ArmyWork.abstractPower(server, squad);
             if (power > bestPower) {
                 best = squad;
                 bestPower = power;
@@ -722,8 +722,8 @@ final class SiegeHolds {
         ArmyRules armyRules = ArmySettings.rules();
         ArmySquad attacker = strongest(server, attacking);
         ArmySquad guard = defending.isEmpty() ? null : strongest(server, defending);
-        Side ours = ArmyWork.side(server, attacker);
-        Side guardSide = guard == null ? null : ArmyWork.side(server, guard);
+        Side ours = ArmyWork.abstractSide(server, attacker);
+        Side guardSide = guard == null ? null : ArmyWork.abstractSide(server, guard);
         int men = strength(garrison, serving);
         Side crowd = ProvinceHolds.garrison(garrison == null ? 0 : ProvinceHolds.guardsByNumber(garrison.guards(), serving),
                 garrison == null ? 0 : garrison.militia());

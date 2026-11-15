@@ -554,8 +554,10 @@ public final class ArmyField {
             }
             double distance = Math.hypot(enemy.x() - at.x(), enemy.z() - at.z());
             if (distance <= rules.engage()) {
-                if (ArmyWork.hasBodies(squad) || ArmyWork.hasBodies(target.get()) || !WarWork.hostileNow(server, squad.kingdomId(), target.get().kingdomId())) {
-                    // Near players soldiers fight in the world; without war nobody fights.
+                if (!ArmyWork.fightsAbstractly(squad) || !ArmyWork.fightsAbstractly(target.get())
+                        || !WarWork.hostileNow(server, squad.kingdomId(), target.get().kingdomId())) {
+                    // Near players soldiers fight in the world, the members of a squad without a body as data; without war nobody
+                    // fights.
                     continue;
                 }
                 engage(server, squad, target.get(), at, enemy, rules, now);
@@ -635,13 +637,13 @@ public final class ArmyField {
         double firstEdge = 0.0;
         double secondEdge = 0.0;
         for (ArmySquad squad : first) {
-            Side side = ArmyWork.side(server, squad);
+            Side side = ArmyWork.abstractSide(server, squad);
             sides.put(squad.id(), side);
             firstSide = firstSide.isEmpty() && firstSide.size() == 0 ? side : firstSide.with(side);
             firstEdge += side.power() * battle.first.get(squad.id());
         }
         for (ArmySquad squad : second) {
-            Side side = ArmyWork.side(server, squad);
+            Side side = ArmyWork.abstractSide(server, squad);
             sides.put(squad.id(), side);
             secondSide = secondSide.isEmpty() && secondSide.size() == 0 ? side : secondSide.with(side);
             secondEdge += side.power() * battle.second.get(squad.id());
@@ -690,7 +692,7 @@ public final class ArmyField {
     private static List<ArmySquad> squads(ArmyState army, Set<Long> ids) {
         List<ArmySquad> found = new ArrayList<>();
         for (long id : ids) {
-            army.squad(id).filter(squad -> !ArmyWork.hasBodies(squad)).ifPresent(found::add);
+            army.squad(id).filter(ArmyWork::fightsAbstractly).ifPresent(found::add);
         }
         return found;
     }

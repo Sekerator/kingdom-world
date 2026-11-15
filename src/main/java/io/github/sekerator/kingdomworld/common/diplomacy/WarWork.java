@@ -553,7 +553,7 @@ public final class WarWork {
                 for (UUID member : war.members(side)) {
                     for (ArmySquad squad : ArmyWork.state(server).squadsOf(member)) {
                         Optional<UUID> on = onLandOf(server, squad);
-                        if (on.isPresent() && enemies.contains(on.get()) && !ArmyWork.hasBodies(squad)) {
+                        if (on.isPresent() && enemies.contains(on.get()) && ArmyWork.fightsAbstractly(squad)) {
                             field.add(squad);
                         }
                     }
@@ -599,7 +599,7 @@ public final class WarWork {
         double bestPower = 0.0;
         boolean bestOnLand = false;
         for (ArmySquad squad : ArmyWork.state(server).squadsOf(kingdomId)) {
-            if (ArmyWork.hasBodies(squad)) {
+            if (!ArmyWork.fightsAbstractly(squad)) {
                 continue;
             }
             boolean onLand = onLandOf(server, squad).map(kingdomId::equals).orElse(false);
@@ -607,7 +607,7 @@ public final class WarWork {
             if (!onLand && !home) {
                 continue;
             }
-            double power = ArmyWork.power(server, squad);
+            double power = ArmyWork.abstractPower(server, squad);
             if (power <= 0) {
                 continue;
             }
@@ -659,8 +659,8 @@ public final class WarWork {
             state.exhaust(enemy, attacker, rules.exhaustionLoss(), 0);
             return;
         }
-        Side ours = ArmyWork.side(server, attacking);
-        Side theirs = ArmyWork.side(server, defending.get());
+        Side ours = ArmyWork.abstractSide(server, attacking);
+        Side theirs = ArmyWork.abstractSide(server, defending.get());
         Battle.Result result = Battle.resolve(ours, theirs, armyRules.battle(), rolls());
         if (result.winner() == Battle.Winner.NONE) {
             return;
@@ -771,11 +771,11 @@ public final class WarWork {
         List<Side> guardSides = new ArrayList<>();
         Side all = Side.of(Side.Kind.SOLDIERS, List.of());
         for (ArmySquad squad : guards) {
-            Side side = ArmyWork.side(server, squad);
+            Side side = ArmyWork.abstractSide(server, squad);
             guardSides.add(side);
             all = all.with(side);
         }
-        Side ours = ArmyWork.side(server, raiders);
+        Side ours = ArmyWork.abstractSide(server, raiders);
         Ambushes.Ambush ambush = Ambushes.resolve(1.0, all, ours, RoadSettings.bandits(), armyRules.battle(), rolls());
         if (!ambush.happened()) {
             return Optional.empty();

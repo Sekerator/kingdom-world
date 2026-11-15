@@ -506,6 +506,49 @@ public final class GuardArmyGameTests {
         });
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_guardarmy_bodiless", timeoutTicks = 200)
+    public static void aSquadWithSomeBodiesFightsAsDataWithItsOtherMembers(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper, 20, 8);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Half Seen Squad", UUID.randomUUID());
+        List<Citizen> all = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            all.add(soldier(helper, kingdom, 4 + i, 3));
+        }
+        ArmySquad squad = ArmyWork.state(server).formSquad(null, kingdom.id(), all.stream().map(Citizen::id).toList(), ArmySettings.rules(),
+                KingdomWorldApi.state(server)).squad().orElseThrow(() -> new IllegalStateException("No squad was formed"));
+        // One of the six is near a player and has a body; the five others live as data.
+        Citizen seen = all.get(0);
+        body(helper, seen, 4, 3, false);
+        Citizen[] citizens = all.toArray(new Citizen[0]);
+        helper.runAtTickTime(2, () -> {
+            ArmySquad now = ArmyWork.state(server).squad(squad.id()).orElseThrow();
+            helper.assertTrue(ArmyWork.fightsAbstractly(now) && ArmyWork.bodiless(now) == 5, "The squad does not fight as data: "
+                    + ArmyWork.bodiless(now));
+            io.github.sekerator.kingdomworld.core.combat.Side ours = ArmyWork.abstractSide(server, now);
+            helper.assertTrue(ours.size() == 5 && ours.fighters().stream().noneMatch(f -> f.id().equals(seen.id())),
+                    "The side fighting as data holds " + ours.size());
+            // A battle as data against a far stronger enemy touches the five, never the one with a body.
+            long before = ArmyWork.state(server).soldier(seen.id()).orElseThrow().experience();
+            ArmySquad band = FieldGameTests.band(server, kingdom, 30, 5, new io.github.sekerator.kingdomworld.core.citizen.WorldPos(
+                    io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level), 0, 64, 0));
+            io.github.sekerator.kingdomworld.core.combat.Side enemy = ArmyWork.side(server, band);
+            io.github.sekerator.kingdomworld.core.combat.Battle.Result result = io.github.sekerator.kingdomworld.core.combat.Battle.resolve(ours, enemy,
+                    ArmySettings.rules().battle(), () -> 0.5);
+            ArmyWork.Fought fought = ArmyWork.apply(server, now, ours, result, null, ArmySettings.rules());
+            helper.assertTrue(ArmyWork.state(server).soldier(seen.id()).map(s -> s.experience() == before).orElse(false),
+                    "The soldier with a body took part in the battle as data");
+            boolean touched = fought.fallen().size() + fought.wounded() > 0;
+            for (int i = 1; i < all.size(); i++) {
+                touched |= ArmyWork.state(server).soldier(all.get(i).id()).map(s -> s.battles() > 0).orElse(true);
+            }
+            helper.assertTrue(touched, "None of the five fought");
+            end(helper, kingdom, area, List.of(), citizens);
+            helper.succeed();
+        });
+    }
+
     // ---------------------------------------------------------------- back to the posts
 
     @GameTest(template = EMPTY, batch = "kingdomworld_guardarmy_return", timeoutTicks = 1200)

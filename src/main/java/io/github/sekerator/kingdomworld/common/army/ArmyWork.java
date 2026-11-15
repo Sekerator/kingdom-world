@@ -353,6 +353,47 @@ public final class ArmyWork {
     }
 
     /**
+     * The part of a squad that fights far from players: its members without a body in the world (all of a band of
+     * mercenaries). Members with a body fight in the world, the rest of their squad fights as data all the same.
+     */
+    public static Side abstractSide(MinecraftServer server, ArmySquad squad) {
+        if (squad.mercenaries()) {
+            return side(server, squad);
+        }
+        List<Fighter> fighters = new ArrayList<>();
+        for (UUID member : squad.members()) {
+            if (CitizenBodies.body(member) == null) {
+                fighter(server, member).ifPresent(fighters::add);
+            }
+        }
+        return Side.of(Side.Kind.SOLDIERS, fighters);
+    }
+
+    public static double abstractPower(MinecraftServer server, ArmySquad squad) {
+        return abstractSide(server, squad).power();
+    }
+
+    /**
+     * Members of a squad without a body in the world.
+     */
+    public static int bodiless(ArmySquad squad) {
+        int count = 0;
+        for (UUID member : squad.members()) {
+            if (CitizenBodies.body(member) == null) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Whether a squad has somebody to fight far from players: a member without a body, or a band of mercenaries.
+     */
+    public static boolean fightsAbstractly(ArmySquad squad) {
+        return squad.mercenaries() || bodiless(squad) > 0;
+    }
+
+    /**
      * The whole strength of a kingdom: its soldiers and its hired mercenaries.
      */
     public static double power(MinecraftServer server, UUID kingdomId) {
@@ -435,7 +476,8 @@ public final class ArmyWork {
         } else {
             for (UUID member : squad.members()) {
                 Optional<Citizen> citizen = world.citizens().get(member);
-                if (citizen.isEmpty()) {
+                // A member with a body who was not of the side that fought as data fights in the world.
+                if (citizen.isEmpty() || !ourIds.contains(member) && CitizenBodies.body(member) != null) {
                     continue;
                 }
                 TaskRisks.Accident fate = result.fate(member);
