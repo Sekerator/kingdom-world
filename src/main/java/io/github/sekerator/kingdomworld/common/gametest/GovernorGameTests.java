@@ -7,7 +7,10 @@ import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenLife;
 import io.github.sekerator.kingdomworld.common.construction.BuildingTemplate;
 import io.github.sekerator.kingdomworld.common.construction.BuildingTemplates;
+import io.github.sekerator.kingdomworld.common.construction.CityPlots;
 import io.github.sekerator.kingdomworld.common.construction.ConstructionWork;
+import io.github.sekerator.kingdomworld.common.construction.KingdomLooks;
+import io.github.sekerator.kingdomworld.common.construction.TemplateMaterials;
 import io.github.sekerator.kingdomworld.common.diplomacy.WarWork;
 import io.github.sekerator.kingdomworld.common.nobility.NobilitySettings;
 import io.github.sekerator.kingdomworld.common.nobility.NobilityWork;
@@ -22,25 +25,29 @@ import io.github.sekerator.kingdomworld.core.construction.Box;
 import io.github.sekerator.kingdomworld.core.construction.BuildPlan;
 import io.github.sekerator.kingdomworld.core.construction.Commission;
 import io.github.sekerator.kingdomworld.core.construction.Construction;
+import io.github.sekerator.kingdomworld.core.construction.Materials;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.nobility.NobilityState;
 import io.github.sekerator.kingdomworld.core.nobility.NobleHouse;
 import io.github.sekerator.kingdomworld.core.road.CityCharter;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -77,6 +84,23 @@ public final class GovernorGameTests {
                 + "\"anchor\": [2, 0, 4], \"entrance\": \"south\"}").getAsJsonObject();
         CompoundTag structure = RemoteBuildingGameTests.structure(5, 3, 5, palette, blocks.toArray(new int[0][]));
         return BuildingTemplates.addForTest(KingdomWorld.id("test_" + name), description, structure);
+    }
+
+    /**
+     * Puts into a storehouse what a template costs in the look of the kingdom at its capital, as its governor counts it: the
+     * cloth of the look is of the colour of the kingdom, so that the red bed of the template is a bed of that colour.
+     */
+    static void stock(GameTestHelper helper, Kingdom kingdom, BuildingTemplate template, StorehouseInventory store) {
+        MinecraftServer server = helper.getLevel().getServer();
+        BlockPos hall = CityPlots.middle(server, kingdom.id(), 0).orElse(BlockPos.ZERO);
+        Materials materials = KingdomLooks.materials(server, kingdom.id(), template.id().toString(), hall);
+        int slot = 0;
+        for (Map.Entry<String, Integer> entry : TemplateMaterials.apply(template, materials).items().entrySet()) {
+            Item item = BuiltInRegistries.ITEM.get(new ResourceLocation(entry.getKey()));
+            for (int left = entry.getValue(); left > 0; left -= item.getMaxStackSize()) {
+                store.insertItem(slot++, new ItemStack(item, Math.min(left, item.getMaxStackSize())), false);
+            }
+        }
     }
 
     /**
@@ -122,8 +146,7 @@ public final class GovernorGameTests {
         try {
             RoadSettings.overrideGovernorStock(100);
             StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
-            store.insertItem(0, new ItemStack(Items.COBBLESTONE, 64), false);
-            store.insertItem(1, new ItemStack(Items.RED_BED, 1), false);
+            stock(helper, kingdom, template, store);
             helper.assertTrue(CityGovernors.appoint(server, null, kingdom.id(), people[1].id(), 0).success(), "The carrier was not made mayor");
             helper.assertTrue(CityGovernors.governor(server, kingdom.id(), 0).kind() == CityGovernors.Kind.MAYOR, "The capital has no mayor");
             played(server, kingdom);
@@ -225,8 +248,7 @@ public final class GovernorGameTests {
         try {
             RoadSettings.overrideGovernorStock(100);
             StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
-            store.insertItem(0, new ItemStack(Items.COBBLESTONE, 64), false);
-            store.insertItem(1, new ItemStack(Items.RED_BED, 1), false);
+            stock(helper, kingdom, template, store);
             helper.assertTrue(CityGovernors.appoint(server, null, kingdom.id(), people[1].id(), 0).success(), "The carrier was not made mayor");
             played(server, kingdom);
             CityGovernors.decideNow(server, kingdom.id(), 0);
