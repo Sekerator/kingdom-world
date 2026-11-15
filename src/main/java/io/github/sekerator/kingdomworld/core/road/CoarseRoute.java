@@ -14,7 +14,8 @@ import java.util.Set;
  * every chunk and the coarse way along that field. The fine search keeps to a corridor around the coarse way and takes the field
  * for its estimate.
  *
- * <p>An edge from chunk A to its neighbour B of length L (16, or 22.6 across) costs {@code (b + lambda) * L}; plus the earthworks
+ * <p>An edge from chunk A to its neighbour B of length L (16, or 22.6 across) costs {@code b * 16} ({@code b * 32} across, as the
+ * fine way lays the corner of a diagonal step) and {@code lambda * L}; plus the earthworks
  * of the change of level {@code min(F * L * e / 2 * 3.5, F * H * 7.5 * L)} with {@code e = max(0, |mean B - mean A| - L / k)}; plus
  * the roughness of B {@code max(0, max B - min B - 16 / k) * F * 8}; plus its water {@code share * L * (F * 4 + depth)}; plus
  * {@code foreignCost * b * L} on foreign land; all of it times 1 + 7 times the share of B built over.
@@ -154,7 +155,8 @@ public final class CoarseRoute {
             return Double.POSITIVE_INFINITY;
         }
         double length = diagonal ? 16 * DIAGONAL : 16;
-        double cost = (costs.base() + costs.lambda()) * length;
+        // The fine way lays the corner of every diagonal step: the work across is that of two chunks, the length the diagonal.
+        double cost = costs.base() * (diagonal ? 32 : 16) + costs.lambda() * length;
         double rise = Math.max(0, Math.abs(field.mean[b] - field.mean[a]) - length / costs.grade());
         cost += Math.min(costs.width() * length * rise / 2 * 3.5, costs.width() * costs.tunnel() * 7.5 * length);
         cost += Math.max(0, field.high[b] - field.low[b] - 16.0 / costs.grade()) * costs.width() * 8;

@@ -67,13 +67,13 @@ class CoarseRouteTest {
     void theCoarseWayKeepsOffBuiltChunksAndStopsAtTheVoid() {
         CoarseRoute.Field field = flat(15, 9);
         for (int z = 0; z < 9; z++) {
-            if (z != 8) {
+            if (z != 5) {
                 field.set(7, z, 64, 63, 65, 0, 0, 1.0, false, false);
             }
         }
         CoarseRoute.Result result = CoarseRoute.solve(field, List.of(new int[]{14, 2}), new int[]{0, 2}, GRAVEL);
         assertTrue(result.found());
-        assertTrue(passes(result.path(), 7, 8), "the way crosses the built chunks rather than the gap in them");
+        assertTrue(passes(result.path(), 7, 5), "the way crosses the built chunks rather than the gap in them");
         CoarseRoute.Field islands = flat(10, 3);
         for (int z = 0; z < 3; z++) {
             islands.set(5, z, 0, 0, 0, 0, 0, 0, false, true);
