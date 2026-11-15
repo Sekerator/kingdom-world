@@ -49,6 +49,7 @@
 - **Народ больше не платит подать из ничего:** `folkDues` по умолчанию 0, прежнее значение 1 в конфиге читается как 0. Свой заработок народ получит на следующем этапе.
 - **Что видит король:** вид «города» вкладки «Казна» (казна городов и польза короне, окно города), строка городов в обзоре и в **/kingdom treasury**, казна города в подсказке вкладки «Дороги». Новый раздел конфига `[cityEconomy]`, глава справочника «Казна городов» и раздел README.
 - **Исправлено: город переставал открывать лавки.** Если последняя лавка города закрывалась в день, когда лавкам города не хватило товаров короны, город больше никогда не открывал лавок, а его окно говорило «нет товаров» и при полных складах. Вчерашняя нехватка теперь забывается во всех городах королевства, и в тех, где лавок не осталось.
+- **Исправлено: блок игрока на дальней стройке главы города.** Вдали от игроков блок, который игрок поставил на месте стройки главы, останавливал и всю дальнейшую кладку стройки. Теперь, как и у строителей рядом с игроками, блок стоит, его шаг ждёт, а остальное строится вокруг.
 
 **Экономика жителей, этап 2: мастерские жителей и казённые закупки.** Сетевой протокол 66.
 
@@ -319,6 +320,7 @@ The cities of a kingdom of players grow each by itself and build by themselves u
 - **The townsfolk no longer pay dues out of nothing:** `folkDues` is 0 by default, and the old value 1 of a config is read as 0. Their own earnings come in the next stage.
 - **What the king sees:** the view "cities" of the Treasury tab (treasuries of cities and use to the crown, the window of a city), the line of the cities in the overview and in **/kingdom treasury**, the treasury of a city in the hover of the Roads tab. A new section `[cityEconomy]` of the config, a chapter "Treasuries of cities" of the guide and a part of README.
 - **Fixed: a city stopped opening shops.** If the last shop of a city closed on a day its shops were short of goods of the crown, the city never opened a shop again, and its window told of no goods even with full storehouses. The shortage of yesterday is now forgotten in every city of the kingdom, in those without shops left as well.
+- **Fixed: the block of a player on a far construction of a governor.** Far from players, a block a player put on the place of a construction of a governor stopped all further laying of the construction as well. Now, as with builders near players, the block stays, its step waits and the rest is built around it.
 
 **The economy of citizens, stage 2: workshops of citizens and the buying of the crown.** Network protocol 66.
 

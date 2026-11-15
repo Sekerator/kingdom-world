@@ -1199,10 +1199,12 @@ public final class ConstructionWork {
         pending.sort(Integer::compare);
         List<ItemStack> drops = new ArrayList<>();
         boolean blocked = false;
+        boolean stopped = false;
         long now = KingdomWorldApi.gameTime(level.getServer());
         for (int step : pending) {
-            // A container in the way stops the building, not the rest of the clearing.
-            if (done >= budget || (blocked && plan.step(step).kind() == BuildPlan.Kind.PLACE)) {
+            // A container in the way stops the building, not the rest of the clearing. A block a player put in the way of a
+            // construction of a governor stays standing and its step waits, while the rest is built around it, as builders do.
+            if (done >= budget || (stopped && plan.step(step).kind() == BuildPlan.Kind.PLACE)) {
                 break;
             }
             BuildPlan.Step at = plan.step(step);
@@ -1221,6 +1223,7 @@ public final class ConstructionWork {
             if (result == StepResult.BLOCKED) {
                 construction.setStatus(Construction.Status.BLOCKED, new WorldPos(construction.dimension(), at.x(), at.y(), at.z()));
                 blocked = true;
+                stopped |= !construction.governor();
                 continue;
             }
             done++;
