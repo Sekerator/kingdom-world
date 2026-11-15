@@ -952,6 +952,20 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     // ---------------------------------------------------------------- moving the throne
 
     /**
+     * Whether the viewer stands at the throne of the kingdom, where coins are taken from the vault and the move of the
+     * throne starts. Without a throne or a player it counts as true; the server decides anyway, and it also checks the
+     * dimension, which the client does not know.
+     */
+    boolean atThrone() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (view == null || view.capital() == null || minecraft.player == null) {
+            return true;
+        }
+        int reach = io.github.sekerator.kingdomworld.common.kingdom.KingdomActions.THRONE_REACH;
+        return minecraft.player.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(view.capital())) <= reach * reach;
+    }
+
+    /**
      * Whether the viewer may move the throne: only the king of a kingdom of players with land; the rulers of the world keep their
      * thrones where they stand.
      */
@@ -1495,8 +1509,14 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         if (capitalIndex >= 0 && canMoveThrone()) {
             List<Component> lines = overviewLines();
             int capitalY = top + contentOffset + CONTENT_TOP + 4 + capitalIndex * overviewStep(lines.size(), rulerLines().size());
-            addRenderableWidget(Button.builder(moveThroneLabel(), button -> moveThrone())
+            Button move = addRenderableWidget(Button.builder(moveThroneLabel(), button -> moveThrone())
                     .bounds(left + panelWidth - PAD - moveThroneWidth, capitalY - 3, moveThroneWidth, STYLE_BUTTON_HEIGHT).build());
+            // The move starts only at the throne, it gives the throne into the hands; calling it off works from afar.
+            if (!view.throneMoving() && !atThrone()) {
+                move.active = false;
+                move.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomworld.throne.at_throne_only",
+                        io.github.sekerator.kingdomworld.common.kingdom.KingdomActions.THRONE_REACH)));
+            }
         }
         int y = top + panelHeight - 26;
         int x = left + PAD;

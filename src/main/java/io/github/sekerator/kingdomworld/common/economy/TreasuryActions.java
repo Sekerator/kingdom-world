@@ -200,7 +200,9 @@ public final class TreasuryActions {
             case WAGE -> setWage(player, kingdom, change.text(), change.amount());
             case RENAME -> rename(player, kingdom, change.text());
             case PAY -> payByName(player, kingdom, change.text(), change.amount());
-            case TAKE_COINS -> takeCoins(player, kingdom, change.text(), change.amount());
+            // Coins go into the hands only at the throne, as before the window opened from afar.
+            case TAKE_COINS -> KingdomActions.atThrone(player, kingdom) ? takeCoins(player, kingdom, change.text(), change.amount())
+                    : KingdomActions.Feedback.fail("kingdomworld.throne.at_throne_only", KingdomActions.THRONE_REACH);
             case MINT_STRIKE -> setMintMetal(player, kingdom, change.text(), change.amount() != 0, null);
             case MINT_KEEP -> setMintMetal(player, kingdom, change.text(), null,
                     change.amount() > MintMetals.MAX_KEEP ? -1 : (int) change.amount());

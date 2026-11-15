@@ -77,6 +77,8 @@ public final class CityWalls {
     public static final String CATEGORY = "city_wall";
     /** Blocks around a city that count for its level at least; a wall with a wider radius counts all it holds. */
     public static final int AREA = 64;
+    /** How far a player may stand from a wall, along x or z, to cut a gate where the player stands. */
+    public static final int GATE_REACH = 6;
     /** Where each player was last: the kingdom and city it is in, or none. */
     private static final Map<UUID, String> INSIDE = new HashMap<>();
     private static final java.util.Set<UUID> SEEN = new java.util.HashSet<>();
@@ -551,7 +553,7 @@ public final class CityWalls {
         }
         int cell = wall.get().nearestCell(x, z);
         RouteCell at = wall.get().cells().get(cell);
-        if (Math.abs(at.x() - x) > 6 || Math.abs(at.z() - z) > 6) {
+        if (Math.abs(at.x() - x) > GATE_REACH || Math.abs(at.z() - z) > GATE_REACH) {
             return Outcome.fail(KingdomError.NOT_AT_WALL);
         }
         Outcome outcome = RoadWork.change(server, "cut a gate", state -> {

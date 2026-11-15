@@ -1045,6 +1045,20 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 }).bounds(citizensX, 3, citizensWidth, 16).build());
                 citizensButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
                         Component.translatable("kingdomworld.screen.map.citizens.hint")));
+                if (!(parent instanceof ThroneScreen)) {
+                    // The window of the player's own kingdom, wherever the player stands; the server answers with it.
+                    Component kingdomLabel = Component.translatable("kingdomworld.screen.map.kingdom");
+                    int kingdomWidth = buttonWidth(kingdomLabel);
+                    int kingdomX = citizensX - 2 - kingdomWidth;
+                    buttonsLeft = kingdomX;
+                    Button kingdomButton = addRenderableWidget(Button.builder(kingdomLabel, button -> {
+                        if (minecraft != null && minecraft.getConnection() != null) {
+                            io.github.sekerator.kingdomworld.client.ClientHooks.openOwnKingdom();
+                        }
+                    }).bounds(kingdomX, 3, kingdomWidth, 16).build());
+                    kingdomButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
+                            Component.translatable("kingdomworld.screen.map.kingdom.hint")));
+                }
                 Button list = addRenderableWidget(Button.builder(listLabel, button -> {
                     listing = !listing;
                     listOffset = 0;

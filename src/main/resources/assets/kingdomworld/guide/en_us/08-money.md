@@ -127,7 +127,7 @@ The View button goes through the views: left click forward, right click back.
 
 ### Rights
 
-The Treasury right is needed for the tax, wages, minting and payments; by default the king and the treasurer hold it (see [The rights of positions](rights)). Only the king and the treasurer take coins of the vault into their hands, and the journal writes that down as a transfer. The command **/kingdom treasury** shows the treasury, **/kingdom treasury pay <player> <amount>** pays from it.
+The Treasury right is needed for the tax, wages, minting and payments; by default the king and the treasurer hold it (see [The rights of positions](rights)). Only the king and the treasurer take coins of the vault into their hands, standing at the throne, and the journal writes that down as a transfer. The command **/kingdom treasury** shows the treasury, **/kingdom treasury pay <player> <amount>** pays from it.
 
 ## taxes | Taxes
 @icon minecraft:paper

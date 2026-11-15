@@ -51,6 +51,12 @@ The Throne {item:kingdomworld:throne} of a founded kingdom is its heart. Right-c
 
 The server checks every action of the screen: without the right it does not happen, and the answer shows at the bottom of the screen.
 
+### The window away from the throne
+
+The window of your own kingdom opens anywhere: with the **Kingdom window** key (unbound by default, see [Keys and windows](keys)), the **Kingdom** button of the kingdom map or the command /kingdom window. It is the same window with every tab and the same rights. Buttons "where I stand" take the place where you stand now: a gate in a wall ([Walls and gates](walls)), a point for a squad, the ward of a chunk.
+
+Only at the throne, within 8 blocks of it, can coins be taken from the vault and the move of the throne started: from afar their buttons are inactive, and the tooltip says to come to the throne. The window of another kingdom opens only at its throne.
+
 ### The Overview tab
 
 The lines of the overview: the ruler, the number of members and citizens, the land ("Land: X of Y chunks", with provinces "Land: N chunks, of them X claimed of Y"), the position of the throne, the style and your position. Buttons at the bottom:
@@ -96,7 +102,7 @@ When a throne was set up badly or belongs in a throne hall, the king moves it to
 
 ### How to move it
 
-1. Open the throne screen and on the Overview tab press **"Move throne"** in the line of the throne. Only the king of a kingdom of players sees the button.
+1. Standing at the throne, open its screen and on the Overview tab press **"Move throne"** in the line of the throne. Only the king of a kingdom of players sees the button.
 2. The screen asks for a confirmation and tells what comes next.
 3. You get a **throne for the move** {item:kingdomworld:throne}: it shines, and its tooltip tells which kingdom it belongs to and that it is a move. With a full inventory the throne drops at your feet.
 4. Place it on any block of the kingdom's claimed land, in the dimension where the throne stands. At that very moment the capital moves there, and the old throne vanishes without a drop.

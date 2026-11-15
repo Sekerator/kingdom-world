@@ -523,8 +523,10 @@ final class TreasuryTab {
                 send(EconomyPackets.TreasuryChange.Action.TAKE_COINS, coinChoice.id(), count);
             }
         }).bounds(choiceX + coinChoiceWidth + GAP, y, takeWidth, ROW - 2).build());
-        take.active = view.canTakeCoins() && view.vault().count(coinChoice) > 0;
-        take.setTooltip(Tooltip.create(Component.translatable(KEY + "take_coins_hint")));
+        boolean atThrone = screen.atThrone();
+        take.active = view.canTakeCoins() && view.vault().count(coinChoice) > 0 && atThrone;
+        take.setTooltip(Tooltip.create(atThrone ? Component.translatable(KEY + "take_coins_hint")
+                : Component.translatable("kingdomworld.throne.at_throne_only", io.github.sekerator.kingdomworld.common.kingdom.KingdomActions.THRONE_REACH)));
     }
 
     private static long parseCount(String text) {

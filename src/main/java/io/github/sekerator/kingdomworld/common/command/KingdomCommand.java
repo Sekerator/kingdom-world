@@ -104,6 +104,7 @@ public final class KingdomCommand {
                 .then(CitizenCommands.playerCommand())
                 .then(Commands.literal("workers").executes(context -> run(context.getSource(),
                         io.github.sekerator.kingdomworld.common.citizen.WorkforceActions.open(player(context)))))
+                .then(Commands.literal("window").executes(context -> run(context.getSource(), KingdomActions.openOwn(player(context)))))
                 .then(CompanionCommands.playerCommand())
                 .then(LawCommands.playerCommand())
                 .then(io.github.sekerator.kingdomworld.common.siege.SiegeCommands.playerCommand())

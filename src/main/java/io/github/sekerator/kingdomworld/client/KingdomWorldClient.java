@@ -41,6 +41,9 @@ public final class KingdomWorldClient {
     /** Opens the window of the workers; no key by default, the pack has few free ones. */
     public static final KeyMapping WORKERS_KEY = new KeyMapping("key.kingdomworld.workers", KeyConflictContext.IN_GAME,
             InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "key.categories.kingdomworld");
+    /** Opens the window of the player's own kingdom wherever the player stands; no key by default. */
+    public static final KeyMapping KINGDOM_KEY = new KeyMapping("key.kingdomworld.kingdom", KeyConflictContext.IN_GAME,
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "key.categories.kingdomworld");
     /** Opens the guide; no key by default either. */
     public static final KeyMapping GUIDE_KEY = new KeyMapping("key.kingdomworld.guide", KeyConflictContext.IN_GAME,
             InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "key.categories.kingdomworld");
@@ -101,6 +104,7 @@ public final class KingdomWorldClient {
         event.register(PARTY_KEY);
         event.register(LAW_KEY);
         event.register(WORKERS_KEY);
+        event.register(KINGDOM_KEY);
         event.register(GUIDE_KEY);
         event.register(io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.ROTATE_KEY);
         event.register(io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.MIRROR_KEY);
@@ -165,6 +169,11 @@ public final class KingdomWorldClient {
                         io.github.sekerator.kingdomworld.common.network.data.WorkforceView.Query.of(
                                 io.github.sekerator.kingdomworld.common.network.data.WorkforceView.Mode.CITIZENS,
                                 io.github.sekerator.kingdomworld.common.citizen.WorkforceActions.DEFAULT_PAGE)));
+            }
+        }
+        while (KINGDOM_KEY.consumeClick()) {
+            if (minecraft.player != null && minecraft.screen == null && minecraft.getConnection() != null) {
+                ClientHooks.openOwnKingdom();
             }
         }
         while (GUIDE_KEY.consumeClick()) {

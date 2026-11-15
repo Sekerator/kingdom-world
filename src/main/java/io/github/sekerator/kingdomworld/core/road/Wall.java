@@ -209,6 +209,40 @@ public final class Wall {
         return best;
     }
 
+    /**
+     * How far a place is from the ring, in blocks along x or z, whichever is more: to its nearest block.
+     */
+    public int reach(int x, int z) {
+        RouteCell cell = cells.get(nearestCell(x, z));
+        return Math.max(Math.abs(cell.x() - x), Math.abs(cell.z() - z));
+    }
+
+    /**
+     * The wall a gate is cut into for a player standing at a place: the wall of the chosen city if it is in the dimension of
+     * the player and no further than {@code reach}, else the nearest wall of the kingdom in that dimension, however far.
+     *
+     * @param cityId the city chosen in the window, 0 for the capital
+     * @return empty when the kingdom has no wall in that dimension
+     */
+    public static Optional<Wall> forGate(Collection<Wall> walls, UUID kingdomId, long cityId, String dimension, int x, int z, int reach) {
+        Wall nearest = null;
+        int nearestReach = Integer.MAX_VALUE;
+        for (Wall wall : walls) {
+            if (!wall.kingdomId().equals(kingdomId) || !wall.dimension().equals(dimension) || wall.cells().isEmpty()) {
+                continue;
+            }
+            int distance = wall.reach(x, z);
+            if (wall.cityId() == cityId && distance <= reach) {
+                return Optional.of(wall);
+            }
+            if (distance < nearestReach || distance == nearestReach && nearest != null && wall.id() < nearest.id()) {
+                nearest = wall;
+                nearestReach = distance;
+            }
+        }
+        return Optional.ofNullable(nearest);
+    }
+
     public long id() {
         return id;
     }

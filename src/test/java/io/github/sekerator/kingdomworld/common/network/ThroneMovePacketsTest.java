@@ -66,4 +66,15 @@ class ThroneMovePacketsTest {
             assertEquals(packet, KingdomActionPacket.decode(buf));
         }
     }
+
+    @Test
+    void theWindowIsAskedForFromAfar() {
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        new KingdomActionPacket(KingdomActionPacket.Action.OPEN, null, 0).encode(buf);
+        KingdomActionPacket read = KingdomActionPacket.decode(buf);
+        assertEquals(0, buf.readableBytes());
+        assertEquals(KingdomActionPacket.Action.OPEN, read.action());
+        assertEquals(null, read.target());
+        assertEquals("71", KingdomWorldNetwork.PROTOCOL_VERSION);
+    }
 }

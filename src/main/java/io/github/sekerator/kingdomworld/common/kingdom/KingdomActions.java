@@ -46,8 +46,12 @@ import java.util.UUID;
  */
 public final class KingdomActions {
     private static final Logger LOGGER = LogUtils.getLogger();
-    /** How far a player may stand from a throne to found a kingdom on it (squared blocks). */
-    private static final double MAX_THRONE_DISTANCE_SQR = 8.0 * 8.0;
+    /**
+     * How far a player may stand from a throne to found a kingdom on it, and to do what puts an item into the
+     * inventory from the window of the kingdom: coins from the vault, the throne to move.
+     */
+    public static final int THRONE_REACH = 8;
+    private static final double MAX_THRONE_DISTANCE_SQR = THRONE_REACH * THRONE_REACH;
 
     /**
      * Feedback for the acting player.
@@ -136,6 +140,31 @@ public final class KingdomActions {
         KingdomWorldNetwork.sendToPlayer(player, new OpenFoundingScreenPacket(pos, color, style));
     }
 
+    /**
+     * Opens the window of the player's own kingdom wherever the player stands. The window of another kingdom
+     * opens only at its throne.
+     */
+    public static Feedback openOwn(ServerPlayer player) {
+        Optional<Kingdom> kingdom = KingdomWorldApi.kingdomOf(player.server, player.getUUID());
+        if (kingdom.isEmpty()) {
+            return Feedback.error(KingdomError.NOT_IN_KINGDOM);
+        }
+        sendView(player, kingdom.get(), true);
+        return Feedback.ok("kingdomworld.kingdom.window_opened");
+    }
+
+    /**
+     * Whether the player stands at the throne of the kingdom: in its dimension, within {@link #THRONE_REACH}
+     * blocks of it.
+     */
+    public static boolean atThrone(ServerPlayer player, UUID kingdomId) {
+        Optional<io.github.sekerator.kingdomworld.core.territory.Capital> capital = KingdomWorldApi.state(player.server).territory()
+                .territory(kingdomId).map(io.github.sekerator.kingdomworld.core.territory.Territory::capital);
+        return capital.isPresent() && capital.get().dimension().equals(Dimensions.id(player.level()))
+                && player.distanceToSqr(capital.get().x() + 0.5, capital.get().y() + 0.5, capital.get().z() + 0.5)
+                <= MAX_THRONE_DISTANCE_SQR;
+    }
+
     @Nullable
     private static InteractionHand crownHand(ServerPlayer player) {
         for (InteractionHand hand : InteractionHand.values()) {
@@ -213,6 +242,13 @@ public final class KingdomActions {
         UUID refresh = kingdomBefore;
         Feedback feedback;
         switch (packet.action()) {
+            case OPEN -> {
+                Feedback opened = openOwn(player);
+                if (!opened.success()) {
+                    reply(player, opened);
+                }
+                return;
+            }
             case VIEW -> {
                 Optional<Kingdom> kingdom = target == null ? Optional.empty() : KingdomWorldApi.kingdom(server, target);
                 kingdom.ifPresent(k -> sendView(player, k, false));
@@ -243,7 +279,8 @@ public final class KingdomActions {
             case DISSOLVE -> feedback = dissolve(player);
             case SET_STYLE -> feedback = kingdomBefore == null ? Feedback.error(KingdomError.NOT_IN_KINGDOM)
                     : KingdomStyles.change(server, player.getUUID(), kingdomBefore, ArchitecturalStyles.id(packet.value()));
-            case MOVE_THRONE -> feedback = ThroneMoving.begin(player);
+            case MOVE_THRONE -> feedback = kingdomBefore != null && !atThrone(player, kingdomBefore)
+                    ? Feedback.fail("kingdomworld.throne.at_throne_only", THRONE_REACH) : ThroneMoving.begin(player);
             case CANCEL_THRONE_MOVE -> feedback = ThroneMoving.cancel(player);
             default -> feedback = Feedback.error(KingdomError.NO_PERMISSION);
         }

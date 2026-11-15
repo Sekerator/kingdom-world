@@ -98,6 +98,7 @@ All keys of the mod are in the controls, category **"KingdomWorld"**, and are re
 | R | Blueprint: turn the building |
 | M | Blueprint: mirror the building |
 | unbound | Window of the workers |
+| unbound | Kingdom window |
 | unbound | Guide |
 
 - **K** opens the kingdom map, and pressing it again closes it. The Kingdom Atlas {item:kingdomworld:kingdom_atlas} in hand does the same ([The atlas and the map](atlas)).
@@ -105,6 +106,7 @@ All keys of the mod are in the controls, category **"KingdomWorld"**, and are re
 - **P** opens the window of your party of players ([Parties of players](parties)).
 - **R** and **M** work while a Blueprint {item:kingdomworld:blueprint} is in hand and the outline of a building shows on the ground: R turns it a quarter, M mirrors it ([Blueprints and the catalog](blueprints)).
 - **Window of the workers** shows who does what and who lacks what. Modpacks have few free keys, so it is unbound by default. It needs the Citizens right ([The Workers window](workers_window)).
+- **Kingdom window** opens the window of your kingdom wherever you are, the same as a right click at the throne: every tab and the same rights. Only at the throne, within 8 blocks of it, are coins taken from the vault and the move of the throne started. Unbound by default: bind it in the controls ([The throne and its window](throne)).
 - **Guide** opens these pages. Unbound by default.
 
 ### The mouse in the windows of the mod
@@ -113,7 +115,7 @@ Buttons that go through choices (profession, position, view of a tab, filter, or
 
 ### Windows of the mod
 
-- **Throne screen**: right-click the throne of a kingdom ([The throne and its window](throne)). The founding screen opens on a right click at an empty throne with the crown in hand ([Founding a kingdom](founding)).
+- **Throne screen**: right-click the throne of a kingdom; for your own kingdom anywhere with the Kingdom window key, the Kingdom button of the kingdom map or /kingdom window ([The throne and its window](throne)). The founding screen opens on a right click at an empty throne with the crown in hand ([Founding a kingdom](founding)).
 - **Kingdom map** and its modes: editing land with the Territory button ([Claiming and releasing land](claiming)), planning a road ([Roads](roads)), the army on the map ([Orders on the map](map_orders)).
 - **Window of a work post**: right-click the post ([The window of a post and hiring](post_window)). **Window of the workers**: its key, the "Workers…" button in the Citizens tab, or /kingdom workers.
 - **Storehouse**: right-click it; a double storehouse has one shared window ([The storehouse](storehouses), [The double storehouse](double_storehouse)).
@@ -161,6 +163,7 @@ Almost everything in the mod is done in windows, but many actions have a command
 
 - /kingdom citizens: the citizens of your kingdom (or of the one whose land you stand on): head count, beds, food and mood.
 - /kingdom workers: the window of the workers; needs the Citizens right.
+- /kingdom window: the window of your kingdom, wherever you stand.
 - /kingdom law: the window of the law, like the key J.
 - /kingdom guide: open this guide anywhere; if you carry no book, you get it again.
 - /kingdom party: the window of your party of players, like the key P.

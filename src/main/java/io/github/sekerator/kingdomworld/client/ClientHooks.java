@@ -40,6 +40,14 @@ public final class ClientHooks {
         Minecraft.getInstance().setScreen(new FoundKingdomScreen(throne, suggestedColor, suggestedStyle));
     }
 
+    /**
+     * Asks the server for the window of the player's own kingdom, wherever the player stands; the answer opens it.
+     */
+    public static void openOwnKingdom() {
+        io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.KingdomActionPacket(
+                io.github.sekerator.kingdomworld.common.network.packet.KingdomActionPacket.Action.OPEN, null, 0));
+    }
+
     public static void openThrone(KingdomView view) {
         Minecraft.getInstance().setScreen(new ThroneScreen(view));
     }

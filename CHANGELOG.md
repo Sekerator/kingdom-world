@@ -41,6 +41,11 @@
 - **Исправлено: дороги при завоевании.** При присоединении королевства, передаче города или провинций его дороги переходят к победителю, а не пропадают из учёта (backlog 236).
 - Справочник (глава «Мир», разделы о королевствах мира и правителях) рассказывает об этом.
 
+Стены, ворота и окно королевства издалека. Сетевой протокол 71: клиент и сервер должны быть одной версии мода.
+
+- **Окно королевства издалека.** Окно своего королевства открывается где угодно: клавишей «Окно королевства» (по умолчанию не назначена, назначается в настройках управления), кнопкой «Королевство» на карте королевств или командой /kingdom window. Это то же окно со всеми вкладками и теми же правами. Только у трона, не дальше 8 блоков от него, берут монеты из хранилища казны и начинают перенос трона: издалека их кнопки неактивны, а подсказка говорит подойти к трону. Окно чужого королевства по-прежнему открывается у его трона.
+- **Ворота там, где стоишь.** Кнопка «Ворота там, где я стою» работает у любой стены королевства: ворота прорубаются в стене выбранного города, если она не дальше 6 блоков, иначе в ближайшей стене королевства в том же измерении. Ответ называет город стены и место ворот, а вместо одной общей ошибки окно говорит, как далеко ближайшая стена, что здесь уже есть ворота или что стены нет.
+
 ### 1.6.2
 
 Плавильщик и повар работают партиями и топят сразу все печи своей зоны, а мастерские ходят на склад за ингредиентами на всю партию. Зона поста может заходить за границу королевства, а двое строителей одной стройки больше не делают одно и то же. Сетевой протокол 70: клиент и сервер должны быть одной версии мода.
@@ -411,6 +416,11 @@ Fewer stutters on a busy server: work the mod did in one tick goes in parts. The
 - **Fixed: a squad with bodies did not fight.** Members of a squad without a body fight as data even when a few of its members have a body near a player; the bodies fight in the world (backlog 369).
 - **Fixed: roads in a conquest.** When a kingdom is annexed or a city or provinces change hands, its roads go to the winner instead of vanishing from the books (backlog 236).
 - The guide (the chapter on the world, the parts on kingdoms of the world and their rulers) tells of it.
+
+Walls, gates and the kingdom window from afar. Network protocol 71: the client and the server must run the same version of the mod.
+
+- **The kingdom window from afar.** The window of your own kingdom opens anywhere: with the Kingdom window key (unbound by default, bind it in the controls), the Kingdom button of the kingdom map or the command /kingdom window. It is the same window with every tab and the same rights. Only at the throne, within 8 blocks of it, are coins taken from the vault and the move of the throne started: from afar their buttons are inactive and the tooltip says to come to the throne. The window of another kingdom still opens at its throne.
+- **A gate where you stand.** The "Cut a gate where I stand" button works at any wall of the kingdom: the gate is cut into the wall of the chosen city if it is within 6 blocks, else into the nearest wall of the kingdom in the same dimension. The answer names the city of the wall and the place of the gate, and instead of one general error the window says how far the nearest wall is, that there is a gate here already, or that there is no wall.
 
 ### 1.6.2
 

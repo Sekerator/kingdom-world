@@ -207,4 +207,33 @@ class WallTest {
         small.cityBuildings = 2;
         assertEquals(CityLevel.CITY, CityLevel.of(3, 2, small.build()), "the thresholds come from the config");
     }
+
+    @Test
+    void theGateGoesIntoTheWallThePlayerStandsBy() {
+        // The capital from x -12 to 12, a city from 20 to 40.
+        List<RouteCell> flat = WallContour.ring((x, z) -> Terrain.Column.land(64), 0, 0, 12);
+        List<RouteCell> town = WallContour.ring((x, z) -> Terrain.Column.land(64), 30, 0, 10);
+        Wall capital = new Wall(1, 0, US, Wall.WallClass.PALISADE, WORLD, 0, 0, flat, List.of(), 0);
+        Wall city = new Wall(2, 7, US, Wall.WallClass.PALISADE, WORLD, 30, 0, town, List.of(), 0);
+        Wall below = new Wall(3, 8, US, Wall.WallClass.PALISADE, "minecraft:the_nether", 30, 0, town, List.of(), 0);
+        Wall foreign = new Wall(4, 9, THEM, Wall.WallClass.PALISADE, WORLD, 30, 0, town, List.of(), 0);
+        List<Wall> walls = List.of(capital, city, below, foreign);
+
+        // The chosen wall while the player stands within reach of it, though another wall is nearer.
+        assertEquals(5, capital.reach(17, 0));
+        assertEquals(3, city.reach(17, 0));
+        assertEquals(capital, Wall.forGate(walls, US, 0, WORLD, 17, 0, 6).orElseThrow());
+        assertEquals(city, Wall.forGate(walls, US, 7, WORLD, 14, 0, 6).orElseThrow(), "6 blocks off the city, 2 off the capital");
+        // The chosen wall is out of reach: the nearest one.
+        assertEquals(city, Wall.forGate(walls, US, 0, WORLD, 19, 0, 6).orElseThrow(), "7 blocks off the capital");
+        assertEquals(capital, Wall.forGate(walls, US, 7, WORLD, 5, 0, 6).orElseThrow());
+        // Far from every wall: the nearest one, however far, so that the answer can say how far.
+        Wall far = Wall.forGate(walls, US, 0, WORLD, 300, 0, 6).orElseThrow();
+        assertEquals(city, far);
+        assertEquals(260, far.reach(300, 0));
+        // Only walls of the kingdom, in the dimension of the player.
+        assertEquals(below, Wall.forGate(walls, US, 0, "minecraft:the_nether", 17, 0, 6).orElseThrow());
+        assertTrue(Wall.forGate(walls, US, 0, "minecraft:the_end", 17, 0, 6).isEmpty());
+        assertEquals(foreign, Wall.forGate(walls, THEM, 0, WORLD, 0, 0, 6).orElseThrow());
+    }
 }

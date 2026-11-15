@@ -350,10 +350,47 @@ public final class RoadActions {
         }
         if (change.action() == RoadPackets.TabChange.Action.GATE_HERE) {
             // The gate goes where the player stands, whatever the client says.
-            change = new RoadPackets.TabChange(change.kingdomId(), change.action(), change.first(), player.blockPosition().asLong(), "");
+            KingdomActions.reply(player, gateHere(player, change.kingdomId(), change.first()));
+            sendTab(player, change.kingdomId());
+            return;
         }
         KingdomActions.reply(player, applyTab(player.server, player.getUUID(), change));
         sendTab(player, change.kingdomId());
+    }
+
+    /**
+     * Cuts a gate where the player stands: into the wall of the chosen city if the player stands by it, else into the nearest
+     * wall of the kingdom in the dimension of the player. The answer names the wall and the place of the gate, or says why not.
+     *
+     * @param cityId the city chosen in the window, 0 for the capital
+     */
+    public static KingdomActions.Feedback gateHere(ServerPlayer player, UUID kingdom, long cityId) {
+        MinecraftServer server = player.server;
+        if (!RoadWork.mayManage(server, player.getUUID(), kingdom)) {
+            return KingdomActions.Feedback.error(KingdomError.NO_PERMISSION);
+        }
+        int x = player.getBlockX();
+        int z = player.getBlockZ();
+        String dimension = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(player.level());
+        Optional<Wall> found = Wall.forGate(RoadWork.state(server).walls(), kingdom, cityId, dimension, x, z, CityWalls.GATE_REACH);
+        if (found.isEmpty()) {
+            String chosen = CityWalls.place(server, kingdom, cityId).map(CityWalls.Place::name).orElse("?");
+            return KingdomActions.Feedback.fail(KEY + "gate_no_wall", chosen);
+        }
+        Wall wall = found.get();
+        String name = CityWalls.place(server, kingdom, wall.cityId()).map(CityWalls.Place::name).orElse("?");
+        int reach = wall.reach(x, z);
+        if (reach > CityWalls.GATE_REACH) {
+            return KingdomActions.Feedback.fail(KEY + "gate_far", name, reach, CityWalls.GATE_REACH);
+        }
+        int cell = wall.nearestCell(x, z);
+        if (wall.inGate(cell)) {
+            return KingdomActions.Feedback.fail(KEY + "gate_exists", name);
+        }
+        RouteCell at = wall.cells().get(cell);
+        Outcome outcome = CityWalls.gateAt(server, player.getUUID(), wall.id(), x, z);
+        return outcome.ok() ? KingdomActions.Feedback.ok(KEY + "gate_cut", name, at.x(), at.z())
+                : KingdomActions.Feedback.error(outcome.error());
     }
 
     private static KingdomActions.Feedback result(Outcome outcome, String key, Object... args) {
@@ -496,14 +533,8 @@ public final class RoadActions {
                         : KingdomActions.Feedback.ok(KEY + "builder_sent", sending.hired().map(io.github.sekerator.kingdomworld.common.citizen.CitizenTexts::name)
                         .orElse(Component.empty()));
             }
-            case GATE_HERE -> {
-                Optional<Wall> wall = roads.wallOf(change.first(), kingdom);
-                if (wall.isEmpty()) {
-                    yield KingdomActions.Feedback.error(KingdomError.NO_WALL);
-                }
-                net.minecraft.core.BlockPos at = net.minecraft.core.BlockPos.of(change.second());
-                yield result(CityWalls.gateAt(server, actor, wall.get().id(), at.getX(), at.getZ()), "gate_cut", at.getX(), at.getZ());
-            }
+            // Needs the player where it stands, see gateHere.
+            case GATE_HERE -> KingdomActions.Feedback.error(KingdomError.VALUE_OUT_OF_RANGE);
             default -> KingdomActions.Feedback.error(KingdomError.VALUE_OUT_OF_RANGE);
         };
     }

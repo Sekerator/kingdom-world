@@ -231,8 +231,11 @@ the city and press **Actions**. The Construction right is needed.
 ### Gates
 
 - A gate opening three blocks wide appears by itself where a road crosses the wall when it is laid out.
-- **Cut a gate where I stand** cuts more: stand by the wall, away from other gates, and a gate is cut at its
-  nearest block. Only the blocks of the wall itself are taken away, and they go to the storehouses.
+- **Cut a gate where I stand** cuts more (the Roads tab, the Cities view, Actions of any city). Stand by the
+  wall, within 6 blocks of it, open the window with the Kingdom window key or the Kingdom button of the map
+  and press the button: a gate is cut at the nearest place of the nearest wall of the kingdom, and the answer
+  names its city and the place of the gate. If the wall is further or there is a gate here already, the
+  window says so. Only the blocks of the wall itself are taken away, and they go to the storehouses.
 - Cutting or opening a gate never loads a chunk on the spot. A gate on the edge of two chunks opens only once
   all its columns are loaded, and a gate cut where the world was not loaded opens as soon as it is.
 

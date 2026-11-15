@@ -44,7 +44,9 @@ public record KingdomActionPacket(Action action, @Nullable UUID target, int valu
         /** The king starts moving the throne and gets the throne for it. */
         MOVE_THRONE,
         /** The king calls the move of the throne off. */
-        CANCEL_THRONE_MOVE
+        CANCEL_THRONE_MOVE,
+        /** Opens the window of the sender's own kingdom wherever the sender stands; the target is ignored. */
+        OPEN
     }
 
     public static KingdomActionPacket setPermission(Role role, Permission permission, boolean granted) {

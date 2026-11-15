@@ -432,7 +432,8 @@ final class RoadsTab {
                 button.setTooltip(Tooltip.create(Component.translatable(KEY + "city_action." + hint + ".hint")));
                 boolean house = row != null && row.governor() == RoadViews.CityRow.HOUSE;
                 button.active = switch (choice) {
-                    case GATE_HERE -> view.canManage() && row != null && row.wallId() != 0;
+                    // The server takes the wall the player stands by, whichever city was chosen.
+                    case GATE_HERE -> view.canManage() && view.cities().stream().anyMatch(city -> city.wallId() != 0);
                     case RENAME -> view.canManage() && row != null && !row.capital();
                     case ON_MAP -> row != null;
                     // A city a house holds has its governor; the capital is no fief, and only the king raises a house.
