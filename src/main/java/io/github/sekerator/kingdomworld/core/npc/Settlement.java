@@ -113,6 +113,8 @@ public final class Settlement {
     public static final int GIVEN_RENEWING = 64;
     /** The flag of the tools, the materials of its crafts and the seed it was given, once. */
     public static final int GIVEN_SUPPLIES = 128;
+    /** The buildings of its plan were looked for once after a raising that could leave some out, and completed if missing. */
+    public static final int GIVEN_REPAIRED = 256;
 
     /**
      * Raises the rank of a settlement that lives as data (a village its ruler makes a small town): its houses and guard follow the

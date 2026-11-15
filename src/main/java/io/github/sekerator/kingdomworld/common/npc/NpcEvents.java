@@ -75,8 +75,9 @@ public final class NpcEvents {
         }
         // Capitals whose raising left buildings out are raised again, once.
         int repaired = CapitalRepair.onStart(server);
-        if (repaired > 0) {
-            LOGGER.info("KingdomWorld kingdoms of the world: {} capital(s) are raised again", repaired);
+        int completed = CapitalRepair.settlementsOnStart(server);
+        if (repaired > 0 || completed > 0) {
+            LOGGER.info("KingdomWorld kingdoms of the world: {} capital(s) are raised again, {} settlement(s) are completed", repaired, completed);
         }
         long planned = state.sites().stream().filter(site -> site.status() == NpcSite.Status.PLANNED).count();
         long spawned = state.sites().stream().filter(site -> site.status() == NpcSite.Status.SPAWNED).count();

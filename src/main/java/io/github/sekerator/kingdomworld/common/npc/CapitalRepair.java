@@ -5,6 +5,7 @@ import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.npc.NpcComposition;
 import io.github.sekerator.kingdomworld.core.npc.NpcSite;
+import io.github.sekerator.kingdomworld.core.npc.NpcState;
 import io.github.sekerator.kingdomworld.core.npc.SpawnStage;
 import io.github.sekerator.kingdomworld.core.territory.Capital;
 import io.github.sekerator.kingdomworld.core.territory.Territory;
@@ -70,6 +71,68 @@ public final class CapitalRepair {
             }
         }
         return repaired;
+    }
+
+    /**
+     * The buildings of the plan of a settlement that stands missing from the register, as its completion looks for them: one of
+     * the template at its place, or for a building that may move one of its kind anywhere on its land.
+     */
+    public static List<String> missing(MinecraftServer server, io.github.sekerator.kingdomworld.core.npc.Settlement settlement) {
+        NpcState state = NpcWork.state(server);
+        Optional<NpcSite> site = state.kingdom(settlement.kingdomId()).map(io.github.sekerator.kingdomworld.core.npc.NpcKingdom::siteId)
+                .flatMap(state::site);
+        List<String> missing = new ArrayList<>();
+        if (site.isEmpty()) {
+            return missing;
+        }
+        for (NpcComposition.Plot plot : SettlementRaiser.layout(settlement, site.get()).plots()) {
+            if (io.github.sekerator.kingdomworld.common.construction.BuildingTemplates.get(plot.template()).filter(t -> t.available()).isEmpty()) {
+                continue;
+            }
+            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind kind =
+                    io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.of(plot.template()).kind();
+            boolean stands = SettlementRenewal.started(server, settlement.kingdomId(), plot, settlement.x() + plot.x(), 0, settlement.z() + plot.z())
+                    || SettlementRenewal.movable(plot) && kind != io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.WELL
+                    && SettlementRenewal.kindStands(server, settlement, kind);
+            if (!stands) {
+                missing.add(plot.template());
+            }
+        }
+        return missing;
+    }
+
+    /**
+     * Looks once at the settlements of the kingdoms of the world that stand: one missing buildings of its plan is completed by
+     * the background, or at once when a player comes near, on the free ground of its plan without levelling what stands.
+     *
+     * @return the settlements to be completed
+     */
+    public static int settlementsOnStart(MinecraftServer server) {
+        if (NpcWork.isReadOnly(server)) {
+            return 0;
+        }
+        int completed = 0;
+        for (io.github.sekerator.kingdomworld.core.npc.Settlement settlement : List.copyOf(NpcWork.state(server).settlements())) {
+            if (settlement.status() != io.github.sekerator.kingdomworld.core.npc.Settlement.Status.STANDING
+                    || settlement.tier() == io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL
+                    || !settlement.given(io.github.sekerator.kingdomworld.core.npc.Settlement.GIVEN_LIVING)
+                    || settlement.given(io.github.sekerator.kingdomworld.core.npc.Settlement.GIVEN_REPAIRED)
+                    || KingdomWorldApi.kingdom(server, settlement.kingdomId()).isEmpty()) {
+                continue;
+            }
+            try {
+                List<String> missing = missing(server, settlement);
+                settlement.give(io.github.sekerator.kingdomworld.core.npc.Settlement.GIVEN_REPAIRED);
+                if (!missing.isEmpty()) {
+                    settlement.forget(io.github.sekerator.kingdomworld.core.npc.Settlement.GIVEN_LIVING);
+                    LOGGER.info("{} misses {} building(s) of its plan ({}): it is completed", settlement, missing.size(), missing);
+                    completed++;
+                }
+            } catch (RuntimeException e) {
+                LOGGER.error("{} could not be looked at", settlement, e);
+            }
+        }
+        return completed;
     }
 
     /**
