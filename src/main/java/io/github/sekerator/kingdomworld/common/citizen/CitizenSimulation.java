@@ -353,6 +353,14 @@ public final class CitizenSimulation {
      * its profession.
      */
     static void findPlaces(MinecraftServer server, Citizens citizens, Citizen citizen) {
+        findPlaces(server, citizens, citizen, true);
+    }
+
+    /**
+     * @param look whether a citizen who gets a workplace looks at it (over the next ticks if the look is large); the settling of a
+     *             kingdom looks at every workplace at once right after
+     */
+    static void findPlaces(MinecraftServer server, Citizens citizens, Citizen citizen, boolean look) {
         if (citizen.home() == null) {
             // A bed in a house comes first; beds in houses whose role rests are not offered. In a kingdom of the world a
             // soldier takes a bunk of a barracks first, and anybody else only as the last bed.
@@ -364,7 +372,7 @@ public final class CitizenSimulation {
         if (profession.isPresent() && profession.get().needsWorkplace() && citizen.workplace() == null) {
             WorldPos near = citizen.home() != null ? citizen.home() : citizen.lastPos();
             citizens.nearestFreeWorkplace(citizen, near).ifPresent(workplace -> {
-                if (citizens.assignWorkplace(citizen, workplace)) {
+                if (citizens.assignWorkplace(citizen, workplace) && look) {
                     surveySoon(server, citizen);
                 }
             });
@@ -384,7 +392,7 @@ public final class CitizenSimulation {
         KingdomWorldState state = KingdomWorldApi.state(server);
         Citizens citizens = state.citizens();
         for (Citizen citizen : List.copyOf(citizens.registry().citizensOf(kingdomId))) {
-            findPlaces(server, citizens, citizen);
+            findPlaces(server, citizens, citizen, false);
             survey(server, citizen);
         }
         for (WorkPost post : citizens.posts().postsOf(kingdomId)) {
@@ -410,7 +418,7 @@ public final class CitizenSimulation {
         int next = Math.max(0, from);
         while (next < all.size()) {
             Citizen citizen = all.get(next++);
-            findPlaces(server, citizens, citizen);
+            findPlaces(server, citizens, citizen, false);
             survey(server, citizen);
             if (next < all.size() && System.nanoTime() - started > nanos) {
                 return next;

@@ -307,7 +307,9 @@ public final class FarmerBehavior implements ProfessionBehavior {
     public static final class Looks {
         /** Columns of farms looked at in a tick at most, in all: five blocks each. */
         static final int COLUMNS_PER_TICK = 512;
-        private static final Map<WorldPos, Pending> PENDING = new java.util.LinkedHashMap<>();
+        /** The looks for farmers who just got their farm, which go first, and those for the townsfolk of farms. */
+        private static final Map<WorldPos, Pending> FARMERS = new java.util.LinkedHashMap<>();
+        private static final Map<WorldPos, Pending> POSTS = new java.util.LinkedHashMap<>();
 
         private Looks() {
         }
@@ -325,8 +327,18 @@ public final class FarmerBehavior implements ProfessionBehavior {
         }
 
         static Pending request(ServerLevel level, UUID kingdomId, WorldPos at, int radius, boolean forPost) {
-            Pending pending = PENDING.computeIfAbsent(at, pos -> new Pending(new Look(level, kingdomId, new BlockPos(pos.x(), pos.y(), pos.z()),
-                    radius)));
+            Pending pending = FARMERS.get(at);
+            if (pending == null) {
+                pending = POSTS.get(at);
+                if (pending == null) {
+                    pending = new Pending(new Look(level, kingdomId, new BlockPos(at.x(), at.y(), at.z()), radius));
+                    (forPost ? POSTS : FARMERS).put(at, pending);
+                } else if (!forPost) {
+                    // A farmer waits for its farm: the look goes on among those of the farmers.
+                    POSTS.remove(at);
+                    FARMERS.put(at, pending);
+                }
+            }
             pending.forPost |= forPost;
             return pending;
         }
@@ -335,32 +347,36 @@ public final class FarmerBehavior implements ProfessionBehavior {
          * Whether a look over the farm of a post is under way.
          */
         public static boolean pending(WorldPos at) {
-            return PENDING.containsKey(at);
+            return FARMERS.containsKey(at) || POSTS.containsKey(at);
         }
 
         /**
          * Takes the looks under way further, {@value #COLUMNS_PER_TICK} columns a tick for all of them.
          */
         public static void tick(net.minecraft.server.MinecraftServer server) {
-            int budget = COLUMNS_PER_TICK;
-            var iterator = PENDING.entrySet().iterator();
-            while (budget > 0 && iterator.hasNext()) {
-                Map.Entry<WorldPos, Pending> entry = iterator.next();
+            int budget = advance(server, FARMERS, COLUMNS_PER_TICK);
+            advance(server, POSTS, budget);
+        }
+
+        private static int advance(net.minecraft.server.MinecraftServer server, Map<WorldPos, Pending> looks, int budget) {
+            while (budget > 0 && !looks.isEmpty()) {
+                Map.Entry<WorldPos, Pending> entry = looks.entrySet().iterator().next();
                 Pending pending = entry.getValue();
                 budget -= pending.look.step(budget);
                 if (!pending.look.done()) {
                     break;
                 }
-                iterator.remove();
+                looks.remove(entry.getKey());
                 finish(server, entry.getKey(), pending);
             }
+            return budget;
         }
 
         /**
          * Runs every look under way to its end at once; for game tests.
          */
         public static void finishNow(net.minecraft.server.MinecraftServer server) {
-            while (!PENDING.isEmpty()) {
+            while (!FARMERS.isEmpty() || !POSTS.isEmpty()) {
                 tick(server);
             }
         }
@@ -389,7 +405,8 @@ public final class FarmerBehavior implements ProfessionBehavior {
         }
 
         public static void reset() {
-            PENDING.clear();
+            FARMERS.clear();
+            POSTS.clear();
         }
     }
 }
