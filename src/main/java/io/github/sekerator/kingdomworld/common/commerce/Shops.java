@@ -391,6 +391,15 @@ public final class Shops {
         return base;
     }
 
+    /**
+     * A shop takes up another trade: the work the crown paid it for in advance goes back to the crown first, since the shop no
+     * longer works as the master it paid and would never deliver it nor give it back.
+     */
+    static void changeTrade(MinecraftServer server, Business shop, String trade, long day) {
+        CrownPurchases.cancelCommissions(server, shop, day);
+        shop.changeTrade(trade, day);
+    }
+
     // ---------------------------------------------------------------- the payday of the shops
 
     /**
@@ -1053,7 +1062,7 @@ public final class Shops {
                 shop.setNextTrade(next);
                 if (!shop.nextTrade().isEmpty() && shop.goods().isEmpty() && returnInputs(server, shop)) {
                     LOGGER.debug("The shop {} of {} takes up the trade {} instead of {}", shop.id(), kingdom, shop.nextTrade(), shop.trade());
-                    shop.changeTrade(shop.nextTrade(), day);
+                    changeTrade(server, shop, shop.nextTrade(), day);
                 }
             }
         }

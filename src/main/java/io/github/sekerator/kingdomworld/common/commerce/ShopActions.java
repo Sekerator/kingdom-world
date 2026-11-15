@@ -662,7 +662,10 @@ public final class ShopActions {
         open(player, shop, false);
     }
 
-    static KingdomActions.Feedback fix(ServerPlayer player, Business shop, String trade) {
+    /**
+     * Fixes the trade of a shop as {@link #pin} does, without the reply and the window.
+     */
+    public static KingdomActions.Feedback fix(ServerPlayer player, Business shop, String trade) {
         MinecraftServer server = player.server;
         if (KingdomWorldApi.isReadOnly(server)) {
             return KingdomActions.Feedback.error(KingdomError.READ_ONLY);
@@ -685,7 +688,7 @@ public final class ShopActions {
         shop.setPinned(trade);
         shop.setNextTrade(trade);
         if (!shop.nextTrade().isEmpty() && shop.goods().isEmpty() && Shops.returnInputs(server, shop)) {
-            shop.changeTrade(trade, TreasuryActions.day(server));
+            Shops.changeTrade(server, shop, trade, TreasuryActions.day(server));
         }
         CommerceSavedData.get(server).setDirty();
         return KingdomActions.Feedback.ok(KEY + "pinned", Component.translatable("kingdomworld.business.trade." + trade));

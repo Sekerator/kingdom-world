@@ -287,6 +287,37 @@ public final class CraftGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_craft_retrade", timeoutTicks = 200)
+    public static void aWorkshopTakingUpAnotherTradeGivesTheCrownItsDepositBack(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        UUID kingId = UUID.randomUUID();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Retrade", kingId);
+        try {
+            Economy economy = KingdomWorldApi.state(server).economy();
+            long day = TreasuryActions.day(server);
+            economy.adminTreasury(kingdom.id(), 5_000, day);
+            CitizenGameTests.storehouse(helper, 0, 0, 1).insertItem(0, new ItemStack(Items.OAK_LOG, 64), false);
+            Business carpenter = workshop(helper, kingdom, "carpenter", Set.of("crafting_table"));
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            state.order(kingId, kingdom.id(), "minecraft:oak_planks", Order.Kind.MAKE, 8, Order.Priority.NORMAL, KingdomWorldApi.gameTime(server),
+                    Integer.MAX_VALUE, id -> true);
+            Production.plan(server, kingdom.id());
+            long funds = economy.treasury(kingdom.id()).orElseThrow().funds();
+            CrownPurchases.step(server, kingdom.id());
+            helper.assertTrue(!carpenter.commissions().isEmpty(), "The crown paid the carpenter nothing in advance");
+            helper.assertTrue(carpenter.goods().isEmpty(), "The carpenter holds goods already: " + carpenter.goods());
+            ServerPlayer king = player(helper, kingId, 5, 5);
+            helper.assertTrue(ShopActions.fix(king, carpenter, Business.GENERAL_STORE).success(), "The general store was not pinned");
+            helper.assertTrue(carpenter.trade().equals(Business.GENERAL_STORE), "The workshop did not take up the general store: " + carpenter.trade());
+            helper.assertTrue(carpenter.commissions().isEmpty(), "The work paid in advance stays with a general store");
+            helper.assertTrue(economy.treasury(kingdom.id()).orElseThrow().funds() == funds, "The deposit did not go back to the crown: "
+                    + economy.treasury(kingdom.id()).orElseThrow().funds() + " of " + funds);
+        } finally {
+            CitizenGameTests.finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_craft_reserve", timeoutTicks = 200)
     public static void purchasesNeverTakeTheTreasuryBelowItsDaysOfWages(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
