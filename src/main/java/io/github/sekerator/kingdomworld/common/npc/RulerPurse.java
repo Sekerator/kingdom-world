@@ -23,6 +23,8 @@ public final class RulerPurse {
     public static final Set<LedgerCategory> UPKEEP = EnumSet.of(LedgerCategory.WAGES, LedgerCategory.ARMY, LedgerCategory.COMPANIONS);
     /** Days of upkeep a crown keeps before it equips new soldiers with bought kits. */
     public static final int KIT_DAYS = 30;
+    /** Days of upkeep a crown keeps before it equips its guard and its officers with bought kits. */
+    public static final int KIT_FIRST_DAYS = 10;
     /** Days of upkeep a crown keeps before its guilds may rise. */
     public static final int GUILD_DAYS = 60;
 

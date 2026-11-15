@@ -222,7 +222,9 @@ public final class ArmyKits {
                 whole = false;
                 continue;
             }
-            long price = free ? 0 : price(server, piece);
+            // A piece the workshops made lies in the storehouses already: the kit takes it from there and costs nothing more.
+            boolean stocked = !free && fromStores(server, citizen, made);
+            long price = free || stocked ? 0 : price(server, piece);
             if (price > 0 && KingdomWorldApi.state(server).economy().treasury(citizen.kingdomId()).map(treasury -> treasury.funds() < price)
                     .orElse(true)) {
                 whole = false;
@@ -253,6 +255,21 @@ public final class ArmyKits {
                     soldier.post().id(), paid);
         }
         return new Issued(pieces, paid, whole);
+    }
+
+    /**
+     * Takes a plain piece of the item of a kit out of the storehouses of the kingdom of a soldier, if they hold one: the swords,
+     * bows and armor its smiths made serve its soldiers before any is bought.
+     *
+     * @return whether one was taken
+     */
+    private static boolean fromStores(MinecraftServer server, Citizen citizen, ItemStack made) {
+        Item item = made.getItem();
+        java.util.function.Predicate<ItemStack> plain = stack -> stack.is(item) && !isIssued(stack) && !stack.isDamaged();
+        if (KingdomStorage.count(server, citizen.kingdomId(), plain) <= 0) {
+            return false;
+        }
+        return KingdomStorage.take(server, citizen.kingdomId(), plain, 1, citizen.lastPos()).stream().mapToInt(ItemStack::getCount).sum() > 0;
     }
 
     /**

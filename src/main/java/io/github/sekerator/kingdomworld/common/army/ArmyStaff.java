@@ -165,12 +165,20 @@ public final class ArmyStaff {
                 }
             }
         }
-        // A ruler of the world buys kits only while its treasury pays a month of its upkeep: a poor kingdom lets its new soldiers
-        // wait for their kits rather than its treasury run dry.
-        boolean afford = free || !io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdomId)
-                || io.github.sekerator.kingdomworld.common.npc.RulerPurse.keepDays(server, kingdomId)
-                >= io.github.sekerator.kingdomworld.common.npc.RulerPurse.KIT_DAYS;
-        for (Soldier soldier : afford ? army.soldiersOf(kingdomId) : java.util.List.<Soldier>of()) {
+        // A ruler of the world buys kits for all only while its treasury pays a month of its upkeep, and for its guard and its
+        // officers while it pays ten days: a poor kingdom lets the new soldiers of its army wait for their kits rather than its
+        // treasury run dry. The guard and the officers are seen to first.
+        boolean npc = io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdomId);
+        long keep = free || !npc ? Long.MAX_VALUE : io.github.sekerator.kingdomworld.common.npc.RulerPurse.keepDays(server, kingdomId);
+        boolean afford = keep >= io.github.sekerator.kingdomworld.common.npc.RulerPurse.KIT_DAYS;
+        boolean first = keep >= io.github.sekerator.kingdomworld.common.npc.RulerPurse.KIT_FIRST_DAYS;
+        java.util.List<Soldier> equipped = new java.util.ArrayList<>(army.soldiersOf(kingdomId));
+        equipped.sort(java.util.Comparator.comparing((Soldier soldier) -> !(soldier.branch() == Branch.GUARD || soldier.post().officer())));
+        for (Soldier soldier : equipped) {
+            boolean priority = soldier.branch() == Branch.GUARD || soldier.post().officer();
+            if (!afford && !(first && priority)) {
+                continue;
+            }
             Optional<Citizen> citizen = world.citizens().get(soldier.citizenId());
             if (citizen.isEmpty() || ArmyWork.isAwayFromHome(server, soldier.citizenId())) {
                 continue;
