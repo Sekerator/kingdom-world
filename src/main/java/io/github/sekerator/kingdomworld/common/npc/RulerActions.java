@@ -385,32 +385,141 @@ public final class RulerActions {
      * builder at the square of its throne and a citizen without work at it, or one taken from other work.
      */
     private static void ensureBuilder(MinecraftServer server, ServerLevel level, NpcKingdom npc) {
+        if (!KingdomWorldApi.state(server).citizens().posts().postsOf(npc.kingdomId(), Professions.BUILDER.id()).isEmpty()) {
+            return;
+        }
+        setUpPost(server, level, npc, Professions.BUILDER.id(), List.of());
+    }
+
+    /**
+     * A work post a ruler sets up for work its kingdom lacks, with the workstations the work needs.
+     *
+     * @param stations the blocks of the workstations placed beside the post
+     */
+    record PostWant(String profession, List<net.minecraft.world.level.block.Block> stations) {
+    }
+
+    /**
+     * The posts a kingdom lacks for the goods it wants made: a smith when its workers lack tools and nobody makes them, a
+     * smelter when its miners bring ore and nobody smelts it, a cook when its people want bread and its fields bring wheat.
+     * The kingdoms of the world appear with farmers, crafters and lumberjacks; the rest is up to their rulers.
+     */
+    static Optional<PostWant> postWanted(MinecraftServer server, UUID id, RulerView view) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        java.util.function.Predicate<String> has = profession -> !state.citizens().posts().postsOf(id, profession).isEmpty();
+        java.util.Map<String, Long> stock = view.stock == null ? java.util.Map.of() : view.stock;
+        boolean toolsShort = false;
+        int miners = 0;
+        int idle = 0;
+        for (Citizen citizen : state.citizens().registry().citizensOf(id)) {
+            if (citizen.workStatus() == io.github.sekerator.kingdomworld.core.citizen.WorkStatus.NO_TOOL) {
+                toolsShort = true;
+            }
+            if (citizen.professionId().equals(Professions.MINER.id())) {
+                miners++;
+            }
+            if (citizen.professionId().equals(Professions.UNEMPLOYED.id())) {
+                idle++;
+            }
+        }
+        for (String tool : io.github.sekerator.kingdomworld.core.npc.RulerMind.STONE_TOOLS) {
+            RulerView.Good good = view.goods.get(tool);
+            toolsShort |= good != null && good.shortage() > 0;
+        }
+        if (toolsShort && !has.test(Professions.SMITH.id())) {
+            return Optional.of(new PostWant(Professions.SMITH.id(), List.of(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE)));
+        }
+        long ore = stock.getOrDefault("minecraft:raw_iron", 0L) + stock.getOrDefault("minecraft:iron_ore", 0L)
+                + stock.getOrDefault("minecraft:deepslate_iron_ore", 0L);
+        if ((ore > 0 || miners > 0) && !has.test(Professions.SMELTER.id())) {
+            return Optional.of(new PostWant(Professions.SMELTER.id(), List.of(net.minecraft.world.level.block.Blocks.FURNACE)));
+        }
+        RulerView.Good wheat = view.goods.get("minecraft:wheat");
+        boolean grain = wheat != null && wheat.stock() >= 3;
+        if (grain && (view.foodDays < io.github.sekerator.kingdomworld.core.npc.RulerMind.FOOD_DAYS || wheat.surplus() > 0) && !has.test(Professions.COOK.id())) {
+            return Optional.of(new PostWant(Professions.COOK.id(), List.of(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE,
+                    net.minecraft.world.level.block.Blocks.SMOKER)));
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The ruler sets up the post its kingdom lacks most, once a turn at most: a post by the square of its throne, the
+     * workstations beside it, and a citizen at it.
+     *
+     * @return the profession set up, or empty
+     */
+    public static Optional<String> posts(MinecraftServer server, NpcKingdom npc, RulerView view) {
+        if (KingdomWorldApi.isReadOnly(server) || !NpcWork.built(server, npc.kingdomId())) {
+            return Optional.empty();
+        }
+        Optional<PostWant> wanted = postWanted(server, npc.kingdomId(), view);
+        if (wanted.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<Territory> own = KingdomWorldApi.state(server).territory().territory(npc.kingdomId());
+        ServerLevel level = own.flatMap(t -> Dimensions.key(t.capital().dimension())).map(server::getLevel).orElse(null);
+        if (level == null) {
+            return Optional.empty();
+        }
+        return setUpPost(server, level, npc, wanted.get().profession(), wanted.get().stations()) ? Optional.of(wanted.get().profession())
+                : Optional.empty();
+    }
+
+    /**
+     * Sets up a post of a profession near the square of the throne, with workstations beside it, and puts a citizen at it: one
+     * without work, or one taken from the most common work.
+     *
+     * @return whether the post stands and somebody works at it
+     */
+    static boolean setUpPost(MinecraftServer server, ServerLevel level, NpcKingdom npc, String profession,
+                             List<net.minecraft.world.level.block.Block> stations) {
         UUID id = npc.kingdomId();
         KingdomWorldState state = KingdomWorldApi.state(server);
-        if (!state.citizens().posts().postsOf(id, Professions.BUILDER.id()).isEmpty()) {
-            return;
-        }
         Optional<NpcSite> site = NpcWork.state(server).site(npc.siteId());
         if (site.isEmpty()) {
-            return;
+            return false;
         }
-        BlockPos pos = null;
         BlockPos wanted = RulerPlaces.builderPost(site.get());
-        for (int r = 0; r <= 2 && pos == null; r++) {
+        BlockPos pos = null;
+        List<BlockPos> beside = new ArrayList<>();
+        java.util.function.Predicate<BlockPos> free = at -> level.getBlockState(at).isAir() && level.getBlockState(at.above()).isAir()
+                && !level.getBlockState(at.below()).isAir() && id.equals(KingdomWorldApi.ownerAt(level, at));
+        // The builder by the throne itself; the other posts in a ring around it, each with room for its workstations.
+        int from = profession.equals(Professions.BUILDER.id()) ? 0 : 2;
+        int to = profession.equals(Professions.BUILDER.id()) ? 2 : 7;
+        for (int r = from; r <= to && pos == null; r++) {
             for (int dx = -r; dx <= r && pos == null; dx++) {
                 for (int dz = -r; dz <= r && pos == null; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != r) {
+                        continue;
+                    }
                     BlockPos at = wanted.offset(dx, 0, dz);
-                    if (level.getBlockState(at).isAir() && !level.getBlockState(at.below()).isAir() && id.equals(KingdomWorldApi.ownerAt(level, at))) {
+                    if (!free.test(at)) {
+                        continue;
+                    }
+                    List<BlockPos> room = new ArrayList<>();
+                    for (net.minecraft.core.Direction side : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+                        BlockPos next = at.relative(side);
+                        if (room.size() < stations.size() && free.test(next)) {
+                            room.add(next);
+                        }
+                    }
+                    if (room.size() >= stations.size()) {
                         pos = at;
+                        beside = room;
                     }
                 }
             }
         }
         if (pos == null) {
-            LOGGER.info("The ruler of {} found no place for a builder at its throne", npc.name().latin());
-            return;
+            LOGGER.info("The ruler of {} found no place for a {} at its throne", npc.name().latin(), profession);
+            return false;
         }
         level.setBlockAndUpdate(pos, io.github.sekerator.kingdomworld.common.registry.ModRegistries.WORK_POST.get().defaultBlockState());
+        for (int i = 0; i < stations.size(); i++) {
+            level.setBlockAndUpdate(beside.get(i), stations.get(i).defaultBlockState());
+        }
         io.github.sekerator.kingdomworld.core.citizen.WorldPos at = ConstructionWork.worldPos(level, pos);
         // The post becomes known to the citizens as the scan of its chunk finds it.
         LevelChunk chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
@@ -418,49 +527,49 @@ public final class RulerActions {
             io.github.sekerator.kingdomworld.common.citizen.CitizenSites.scanChunk(level, chunk);
         }
         int maxSeats = io.github.sekerator.kingdomworld.common.citizen.work.GatheringSettings.rules().maxSeats();
-        KingdomWorldApi.change(server, "set up the builder of a kingdom of the world", s -> {
+        KingdomWorldApi.change(server, "set up a post of a kingdom of the world", s -> {
             if (s.citizens().posts().get(at).isEmpty()) {
                 return Outcome.fail(KingdomError.UNCHANGED);
             }
-            s.setPostProfession(null, at, Professions.BUILDER.id());
+            s.setPostProfession(null, at, profession);
             return s.setPostSeats(null, at, 1, maxSeats);
         });
-        Outcome hired = KingdomWorldApi.change(server, "hire the builder of a kingdom of the world", s -> s.hire(null, at).outcome());
+        BlockPos where = pos;
+        Outcome hired = KingdomWorldApi.change(server, "hire at a post of a kingdom of the world", s -> s.hire(null, at).outcome());
         if (hired.ok()) {
-            LOGGER.info("The ruler of {} set a builder to work at {}", npc.name().latin(), pos.toShortString());
-            return;
+            LOGGER.info("The ruler of {} set a {} to work at {}", npc.name().latin(), profession, where.toShortString());
+            return true;
         }
         if (hired.error() != KingdomError.NO_UNEMPLOYED) {
-            LOGGER.debug("The ruler of {} could not set a builder to work at {}: {}", npc.name().latin(), pos.toShortString(), hired.error());
-            return;
+            LOGGER.debug("The ruler of {} could not set a {} to work at {}: {}", npc.name().latin(), profession, where.toShortString(),
+                    hired.error());
+            return false;
         }
-        // Nobody is without work: a worker of the most common work goes to building.
+        // Nobody is without work: a worker of the most common work goes to the new one.
         java.util.Map<String, Integer> counts = new java.util.HashMap<>();
         for (Citizen citizen : state.citizens().registry().citizensOf(id)) {
             counts.merge(citizen.professionId(), 1, Integer::sum);
         }
         for (Citizen citizen : state.citizens().registry().citizensOf(id)) {
-            String profession = citizen.professionId();
-            if (counts.getOrDefault(profession, 0) >= 2 && !profession.equals(Professions.UNEMPLOYED.id())
+            String old = citizen.professionId();
+            if (counts.getOrDefault(old, 0) >= 2 && !old.equals(Professions.UNEMPLOYED.id()) && !old.equals(profession)
                     && !io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server).soldiersOf(id).stream()
                     .anyMatch(soldier -> soldier.citizenId().equals(citizen.id()))) {
-                Outcome moved = KingdomWorldApi.change(server, "move a citizen of a kingdom of the world to building",
-                        s -> move(s, citizen, at));
+                Outcome moved = KingdomWorldApi.change(server, "move a citizen of a kingdom of the world to new work",
+                        s -> move(s, citizen, at, profession));
                 if (moved.ok()) {
                     io.github.sekerator.kingdomworld.common.citizen.CitizenActions.afterProfessionChange(server, citizen);
                 }
-                LOGGER.info("The ruler of {} {} a {} to building at {}", npc.name().latin(), moved.ok() ? "moved" : "could not move",
-                        profession, pos.toShortString());
-                return;
+                LOGGER.info("The ruler of {} {} a {} to work as a {} at {}", npc.name().latin(), moved.ok() ? "moved" : "could not move",
+                        old, profession, where.toShortString());
+                return moved.ok();
             }
         }
+        return false;
     }
 
-    /**
-     * Moves a citizen from its work to the post of a builder; when the post does not take it, the citizen goes back to the work
-     * and the place it had.
-     */
-    private static Outcome move(KingdomWorldState state, Citizen citizen, io.github.sekerator.kingdomworld.core.citizen.WorldPos post) {
+    private static Outcome move(KingdomWorldState state, Citizen citizen, io.github.sekerator.kingdomworld.core.citizen.WorldPos post,
+                                String wanted) {
         String profession = citizen.professionId();
         io.github.sekerator.kingdomworld.core.citizen.WorldPos workplace = citizen.workplace();
         Outcome freed = state.setProfession(null, citizen.id(), Professions.UNEMPLOYED.id());
@@ -468,7 +577,7 @@ public final class RulerActions {
             return freed;
         }
         Outcome hired = state.hire(null, post).outcome();
-        if (!hired.ok() || !Professions.BUILDER.id().equals(citizen.professionId())) {
+        if (!hired.ok() || !wanted.equals(citizen.professionId())) {
             if (!citizen.professionId().equals(profession)) {
                 state.setProfession(null, citizen.id(), profession);
             }

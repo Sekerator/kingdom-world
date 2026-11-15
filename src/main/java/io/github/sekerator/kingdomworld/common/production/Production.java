@@ -107,6 +107,19 @@ public final class Production {
     }
 
     /**
+     * Whether the kingdom has somebody to make an item: a staffed post of the profession of one of its recipes, with the
+     * workstation it needs.
+     */
+    public static boolean workable(MinecraftServer server, UUID kingdomId, String item) {
+        for (RecipeOption recipe : Recipes.book(server).recipesFor(item)) {
+            if (workable(server, kingdomId, recipe)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Whether the kingdom has a staffed post of the recipe's profession with the workstation it needs.
      */
     static boolean workable(MinecraftServer server, UUID kingdomId, RecipeOption recipe) {

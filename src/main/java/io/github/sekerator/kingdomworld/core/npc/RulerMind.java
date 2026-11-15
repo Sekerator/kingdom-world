@@ -45,6 +45,10 @@ public final class RulerMind {
     /** Weapons and tools the workshops keep for the army and the workers. */
     public static final List<String> WEAPONS = List.of("minecraft:iron_sword", "minecraft:bow", "minecraft:arrow");
     public static final List<String> TOOLS = List.of("minecraft:iron_pickaxe", "minecraft:iron_axe", "minecraft:iron_hoe");
+    /** Plain tools of stone the smiths make of cobblestone and sticks, one in store for every two workers who wear them out. */
+    public static final List<String> STONE_TOOLS = List.of("minecraft:stone_pickaxe", "minecraft:stone_axe");
+    /** Days of food a ruler wants in its storehouses: bread is ordered up to that, not only when the stores run low. */
+    public static final int FOOD_DAYS = 5;
 
     /**
      * What a ruler decided in a turn.
@@ -419,7 +423,9 @@ public final class RulerMind {
 
     /**
      * Whether a ruler takes a deal offered to it: a fair price for goods it can spare or needs and can pay for is taken, a
-     * robbing one is declined with the reason.
+     * robbing one is declined with the reason. A price is fair against what the ruler would do otherwise: a sale that pays
+     * more than its merchants get abroad for a surplus, a purchase of something it lacks that costs less than buying it
+     * abroad. A regular deal is weighed by what it takes in a week: the goods it drains and the money it costs a day.
      */
     public static Verdict judge(RulerView.Offer offer, RulerView view, RulerMemory memory, RulerRules rules) {
         if (memory.relation(offer.partner()) <= -60) {
@@ -427,29 +433,98 @@ public final class RulerMind {
         }
         double slack = slack(view, rules) / 1000.0;
         long worth = Math.max(1, offer.worth());
+        RulerView.Good good = view.goods.get(offer.item());
         if (offer.weSell()) {
             if (offer.free() < offer.count()) {
                 return new Verdict(false, NO_GOODS);
             }
-            RulerView.Good good = view.goods.get(offer.item());
-            if (good != null && good.stock() - offer.count() < good.want()) {
+            // A regular deal takes its goods every few days: what a week of it takes must leave the kingdom what it wants.
+            long drained = offer.count() * offer.weekly();
+            if (good != null && good.stock() - drained < good.want()) {
                 return new Verdict(false, NEEDED);
             }
-            if (offer.price() < worth * (1 - slack)) {
+            boolean surplus = good != null && good.surplus() >= offer.count();
+            boolean fair = offer.price() >= worth * (1 - slack);
+            boolean betterThanAbroad = surplus && offer.price() * 1000.0 >= worth * (double) view.exportPermille;
+            if (!fair && !betterThanAbroad) {
                 return new Verdict(false, PRICE_LOW);
             }
             return new Verdict(true, "");
         }
-        if (offer.price() > worth * (1 + slack)) {
+        boolean needed = offer.need() > 0;
+        boolean fair = offer.price() <= worth * (1 + slack);
+        boolean cheaperThanAbroad = needed && offer.price() * 1000.0 <= worth * (double) view.importPermille;
+        if (!fair && !cheaperThanAbroad) {
             return new Verdict(false, PRICE_HIGH);
         }
-        if (offer.price() > spare(view, rules)) {
+        long spare = spare(view, rules);
+        if (offer.price() > spare) {
             return new Verdict(false, NO_MONEY);
         }
-        if (offer.need() <= 0 && view.character != RulerCharacter.MERCHANT) {
-            return new Verdict(false, NOT_NEEDED);
+        if (offer.periodDays() > 0) {
+            // A regular purchase is paid every few days: no more a day than the kingdom earns beyond its upkeep and a sixtieth
+            // of what it may spare.
+            long daily = offer.price() / Math.max(1, offer.periodDays());
+            long room = Math.max(0, view.income - dayCost(view)) + spare / 60;
+            if (daily > room) {
+                return new Verdict(false, NO_MONEY);
+            }
+        }
+        if (!needed) {
+            // Goods it does not need only for a merchant, and only cheap enough to sell again at home.
+            if (view.character != RulerCharacter.MERCHANT || offer.price() > worth * (1 - slack / 2)) {
+                return new Verdict(false, NOT_NEEDED);
+            }
         }
         return new Verdict(true, "");
+    }
+
+    /**
+     * The answers to all the deals offered, one after another: each is judged by what the deals taken before it left of the
+     * money and the goods, the sales first, as they bring money in.
+     */
+    public static List<RulerDecision> judgeAll(RulerView view, RulerMemory memory, RulerRules rules) {
+        RulerView left = view.copy();
+        List<RulerView.Offer> offers = new ArrayList<>(view.offers);
+        offers.sort(Comparator.comparing((RulerView.Offer offer) -> !offer.weSell()).thenComparing(RulerView.Offer::need, Comparator.reverseOrder()));
+        List<RulerDecision> answers = new ArrayList<>();
+        for (RulerView.Offer offer : offers) {
+            Verdict verdict = judge(offer, left, memory, rules);
+            if (verdict.accept()) {
+                RulerView.Good good = left.goods.get(offer.item());
+                if (offer.weSell()) {
+                    left.balance += offer.price();
+                    if (good != null) {
+                        left.goods.put(offer.item(), new RulerView.Good(good.item(), Math.max(0, good.stock() - offer.count() * offer.weekly()),
+                                good.want(), good.worth()));
+                    }
+                } else {
+                    left.balance -= offer.price();
+                    if (offer.periodDays() > 0) {
+                        // What it pays every few days from now on is upkeep too.
+                        left.upkeep = dayCost(left) + offer.price() / Math.max(1, offer.periodDays());
+                    }
+                    if (good != null) {
+                        left.goods.put(offer.item(), new RulerView.Good(good.item(), good.stock() + offer.count(), good.want(), good.worth()));
+                    }
+                }
+            }
+            answers.add(new RulerDecision(verdict.accept() ? Kind.ACCEPT : Kind.DECLINE, verdict.reason(), offer.count(), offer.deal(),
+                    offer.partner().toString(), offer.partnerName()));
+        }
+        return answers;
+    }
+
+    /**
+     * Whether a regular deal under way still pays: the same test as when it was offered, with today's money and stock, the
+     * goods it took already back in the count.
+     */
+    public static boolean keeps(RulerView.Offer deal, RulerView view, RulerMemory memory, RulerRules rules) {
+        if (deal.periodDays() <= 0) {
+            return true;
+        }
+        Verdict verdict = judge(deal, view, memory, rules);
+        return verdict.accept() || DISTRUST.equals(verdict.reason()) || NO_GOODS.equals(verdict.reason());
     }
 
     /**
@@ -481,12 +556,7 @@ public final class RulerMind {
      * The decisions of a turn, the answers to the deals offered and the needs of the kingdom.
      */
     public static Plan decide(RulerView view, RulerMemory memory, RulerRules rules) {
-        List<RulerDecision> answers = new ArrayList<>();
-        for (RulerView.Offer offer : view.offers) {
-            Verdict verdict = judge(offer, view, memory, rules);
-            answers.add(new RulerDecision(verdict.accept() ? Kind.ACCEPT : Kind.DECLINE, verdict.reason(), offer.count(), offer.deal(),
-                    offer.partner().toString(), offer.partnerName()));
-        }
+        List<RulerDecision> answers = judgeAll(view, memory, rules);
         List<Scored> candidates = new ArrayList<>();
         List<Need> needs = new ArrayList<>();
         boolean poor = poor(view, rules);
@@ -719,8 +789,18 @@ public final class RulerMind {
      * Orders for the workshops, the mint, taxes, wages, the law, feasts, the tower and positions.
      */
     private static void household(RulerView view, RulerMemory memory, RulerRules rules, List<Scored> out, long spare, boolean threat) {
-        if (view.foodDays < 3 && view.makeable.contains(BREAD) && !view.ordered.contains(BREAD)) {
-            out.add(new Scored(92, RulerDecision.of(Kind.ORDER, BREAD, want(view, BREAD, view.population * 3L))));
+        // Bread up to the days of food the ruler wants, and from the wheat that heaps up in the storehouses.
+        RulerView.Good wheat = view.goods.get("minecraft:wheat");
+        boolean heap = wheat != null && wheat.stock() > 4 * Math.max(1, wheat.want());
+        if ((view.foodDays < FOOD_DAYS || heap) && view.makeable.contains(BREAD) && !view.ordered.contains(BREAD)) {
+            out.add(new Scored(view.foodDays < 3 ? 92 : 58, RulerDecision.of(Kind.ORDER, BREAD, want(view, BREAD, view.population * 3L))));
+        }
+        for (String item : STONE_TOOLS) {
+            if (view.makeable.contains(item) && !view.ordered.contains(item) && shortage(view, item) > 0) {
+                // Tools of stone of its own smith before buying them abroad: the workers wear them out every few days.
+                out.add(new Scored(47, RulerDecision.of(Kind.ORDER, item, want(view, item, 1))));
+                break;
+            }
         }
         for (String item : WEAPONS) {
             if (view.makeable.contains(item) && !view.ordered.contains(item) && shortage(view, item) > 0) {
@@ -835,7 +915,7 @@ public final class RulerMind {
      * Goods the kingdom lacks, the most valuable lack first.
      */
     private static void goods(RulerView view, List<Need> needs) {
-        if (view.foodDays < 5) {
+        if (view.foodDays < FOOD_DAYS) {
             needs.add(0, new Need(NeedKind.FOOD, BREAD, shortage(view, BREAD)));
         }
         view.goods.values().stream().filter(good -> good.shortage() > 0 && !good.item().equals(BREAD))

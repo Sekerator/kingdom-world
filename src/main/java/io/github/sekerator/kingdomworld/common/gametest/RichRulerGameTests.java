@@ -3,12 +3,17 @@ package io.github.sekerator.kingdomworld.common.gametest;
 import io.github.sekerator.kingdomworld.KingdomWorld;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.economy.TreasuryActions;
+import io.github.sekerator.kingdomworld.common.npc.NpcRulers;
 import io.github.sekerator.kingdomworld.common.npc.NpcSettings;
+import io.github.sekerator.kingdomworld.common.npc.RulerActions;
+import io.github.sekerator.kingdomworld.common.storage.KingdomStorage;
 import io.github.sekerator.kingdomworld.common.npc.NpcSpawner;
 import io.github.sekerator.kingdomworld.common.npc.NpcWork;
 import io.github.sekerator.kingdomworld.common.trade.TradeSettings;
 import io.github.sekerator.kingdomworld.common.trade.TradeWork;
+import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
+import io.github.sekerator.kingdomworld.core.npc.NpcKingdom;
 import io.github.sekerator.kingdomworld.core.npc.NpcLevel;
 import io.github.sekerator.kingdomworld.core.npc.NpcRules;
 import io.github.sekerator.kingdomworld.core.npc.NpcSite;
@@ -17,6 +22,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
@@ -88,6 +95,35 @@ public final class RichRulerGameTests {
             helper.succeed();
         } finally {
             NpcGameTests.cleanUp(helper, site, center, NpcGameTests.HALF3);
+        }
+    }
+
+    @GameTest(template = NpcGameTests.EMPTY, batch = "kingdomworld_rich_posts", timeoutTicks = 2400)
+    public static void aRulerSetsUpTheWorkItsKingdomLacks(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        BlockPos center = NpcGameTests.platform(helper);
+        NpcSite site = null;
+        try {
+            site = NpcGameTests.plant(helper, center);
+            NpcSpawner.runNow(server, site, NpcGameTests.STEPS);
+            Kingdom kingdom = NpcGameTests.kingdomOf(helper, site);
+            NpcKingdom npc = NpcWork.kingdom(server, kingdom.id()).orElseThrow();
+            var posts = KingdomWorldApi.state(server).citizens().posts();
+            long day = TreasuryActions.day(server);
+            // Ore in the storehouses and nobody to smelt it: the ruler sets up what its kingdom lacks, a post a turn, the smelter among
+            // them, and nothing twice.
+            helper.assertTrue(posts.postsOf(kingdom.id(), "smelter").isEmpty(), "A small kingdom appeared with a smelter");
+            KingdomStorage.insert(server, kingdom.id(), new ItemStack(Items.RAW_IRON, 16), null);
+            List<String> set = new java.util.ArrayList<>();
+            for (int turn = 0; turn < 3; turn++) {
+                RulerActions.posts(server, npc, NpcRulers.look(server, npc, day)).ifPresent(set::add);
+            }
+            helper.assertTrue(set.contains("smelter") && set.size() == new java.util.HashSet<>(set).size(), "The ruler set up " + set);
+            WorkPost smelter = posts.postsOf(kingdom.id(), "smelter").get(0);
+            helper.assertTrue(!smelter.workers().isEmpty(), "Nobody works at the smelter");
+            helper.succeed();
+        } finally {
+            NpcGameTests.cleanUp(helper, site, center);
         }
     }
 }

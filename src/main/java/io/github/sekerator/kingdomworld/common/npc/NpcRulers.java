@@ -540,6 +540,7 @@ public final class NpcRulers {
         for (RulerDecision answer : plan.answers()) {
             carryOut(server, kingdom, answer, day);
         }
+        review(server, id, view, memory);
         if (!poor) {
             for (RulerDecision bought : RulerActions.supply(server, id, RulerMind.importBudget(view, rules))) {
                 finish(server, id, bought, Outcome.DONE, day);
@@ -548,6 +549,10 @@ public final class NpcRulers {
         // Workers who stand idle for want of a tool get one bought, poor or not: without tools a kingdom earns nothing.
         for (RulerDecision bought : RulerActions.tools(server, id)) {
             finish(server, id, bought, Outcome.DONE, day);
+        }
+        // The work its kingdom lacks: a smith, a smelter or a cook set to work by the throne, one a turn.
+        if (!poor) {
+            RulerActions.posts(server, kingdom, view);
         }
         // The garrison: the fallen are replaced, the posts of officers filled and the soldiers put on their posts.
         NpcGarrison.daily(server, id);
@@ -589,6 +594,47 @@ public final class NpcRulers {
             }
         }
         return plan;
+    }
+
+    /** Regular deals that failed the review of the ruler at its last turns, by deal id: two in a row end the deal. */
+    private static final Map<Long, Integer> STRIKES = new ConcurrentHashMap<>();
+
+    /**
+     * The ruler looks at its regular deals under way: one that no longer pays (it drains goods the kingdom wants, or costs more
+     * a day than the treasury affords) at two turns in a row is called off.
+     */
+    static void review(MinecraftServer server, UUID id, RulerView view, RulerMemory memory) {
+        KingdomWorldState world = KingdomWorldApi.state(server);
+        var prices = io.github.sekerator.kingdomworld.common.economy.ItemPrices.table(server);
+        for (Deal deal : world.trade().dealsOf(id)) {
+            if (deal.status() != Deal.Status.ACTIVE || deal.periodDays() <= 0) {
+                continue;
+            }
+            UUID partner = deal.partnerOf(id);
+            boolean weSell = id.equals(deal.seller());
+            long price = deal.currency().equals(id) ? deal.price()
+                    : io.github.sekerator.kingdomworld.core.trade.ExchangeRates.convert(deal.price(), world.economy().rate(deal.currency()),
+                    world.economy().rate(id), 0);
+            long worth = Math.max(1, prices.value(deal.item()).units()) * deal.count();
+            RulerView.Good good = view.goods.get(deal.item());
+            // The goods it sells are its own until they leave: free as far as the storehouses hold them.
+            long free = good == null ? deal.count() : good.stock();
+            RulerView.Offer offer = new RulerView.Offer(deal.id(), partner, kingdomName(server, partner), false, weSell, deal.item(), deal.count(),
+                    price, worth, free, good == null || good.stock() > 4 * Math.max(1, good.want()) + deal.count() ? 0
+                    : Math.max(1, good.shortage()), deal.periodDays());
+            if (RulerMind.keeps(offer, view, memory, NpcSettings.rulers())) {
+                STRIKES.remove(deal.id());
+                continue;
+            }
+            int strikes = STRIKES.merge(deal.id(), 1, Integer::sum);
+            if (strikes >= 2) {
+                STRIKES.remove(deal.id());
+                Outcome cancelled = KingdomWorldApi.change(server, "call off a regular deal of a kingdom of the world",
+                        state -> state.cancelDeal(null, id, deal.id()));
+                LOGGER.info("The ruler of {} called off the regular deal {} of {} x {} with {}: {}", kingdomName(server, id), deal.id(),
+                        deal.count(), deal.item(), kingdomName(server, partner), cancelled.ok() ? "it no longer pays" : cancelled.error());
+            }
+        }
     }
 
     private static boolean needsJob(RulerDecision decision) {
@@ -744,13 +790,9 @@ public final class NpcRulers {
             turnTick = true;
             RulerMemory memory = state.ruler(id);
             RulerView view = look(server, kingdom, day);
-            for (RulerView.Offer offer : view.offers) {
-                if (UNANSWERABLE.contains(offer.deal())) {
-                    continue;
-                }
-                RulerMind.Verdict verdict = RulerMind.judge(offer, view, memory, NpcSettings.rulers());
-                carryOut(server, kingdom, new RulerDecision(verdict.accept() ? RulerDecision.Kind.ACCEPT : RulerDecision.Kind.DECLINE,
-                        verdict.reason(), offer.count(), offer.deal(), offer.partner().toString(), offer.partnerName()), day);
+            view.offers.removeIf(offer -> UNANSWERABLE.contains(offer.deal()));
+            for (RulerDecision answer : RulerMind.judgeAll(view, memory, NpcSettings.rulers())) {
+                carryOut(server, kingdom, answer, day);
             }
             // The deals of one kingdom a round: a look at a kingdom is not cheap.
             break;

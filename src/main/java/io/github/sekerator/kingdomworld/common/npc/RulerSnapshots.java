@@ -86,10 +86,11 @@ final class RulerSnapshots {
     /** Kingdoms further than this from the capital are no neighbours, in blocks. */
     private static final int NEIGHBOUR_DISTANCE = 2400;
     /** Days of food a ruler wants in its storehouses. */
-    private static final int FOOD_DAYS = 5;
+    private static final int FOOD_DAYS = RulerMind.FOOD_DAYS;
     /** Things a ruler watches by name, apart from the wood of its place. */
     private static final List<String> WATCHED = List.of(RulerMind.BREAD, "minecraft:wheat", "minecraft:cobblestone", "minecraft:iron_ingot",
-            "minecraft:iron_sword", "minecraft:bow", "minecraft:arrow", "minecraft:iron_pickaxe", "minecraft:iron_axe", "minecraft:iron_hoe");
+            "minecraft:iron_sword", "minecraft:bow", "minecraft:arrow", "minecraft:iron_pickaxe", "minecraft:iron_axe", "minecraft:iron_hoe",
+            "minecraft:stone_pickaxe", "minecraft:stone_axe");
     /** Goods besides the watched ones a ruler offers when it has heaps of them. */
     private static final int EXTRA_GOODS = 4;
 
@@ -537,6 +538,9 @@ final class RulerSnapshots {
         wants.put("minecraft:iron_pickaxe", miners > 0 ? 1L : 0L);
         wants.put("minecraft:iron_axe", lumberjacks > 0 ? 1L : 0L);
         wants.put("minecraft:iron_hoe", farmers > 0 ? 1L : 0L);
+        // A tool in store for every two of its miners and woodcutters: they wear one out every few days.
+        wants.put("minecraft:stone_pickaxe", miners > 0 ? (miners + 1) / 2L : 0L);
+        wants.put("minecraft:stone_axe", lumberjacks > 0 ? (lumberjacks + 1) / 2L : 0L);
         for (Map.Entry<String, Long> want : wants.entrySet()) {
             if (GoodsStacks.item(want.getKey()) == Items.AIR) {
                 continue;
@@ -554,8 +558,9 @@ final class RulerSnapshots {
                 .limit(EXTRA_GOODS)
                 .forEach(entry -> view.goods.put(entry.getKey(), new RulerView.Good(entry.getKey(), entry.getValue(), 32,
                         Math.max(1, prices.value(entry.getKey()).units()))));
+        // What its workshops can make: a recipe for it and a post of the work that makes it with somebody at it.
         for (String item : WATCHED) {
-            if (Production.orderable(server, item)) {
+            if (Production.orderable(server, item) && Production.workable(server, id, item)) {
                 view.makeable.add(item);
             }
         }
@@ -600,7 +605,7 @@ final class RulerSnapshots {
             Kingdom other = state.kingdoms().get(partner).orElse(null);
             boolean player = other != null && other.rulerId() != null;
             view.offers.add(new RulerView.Offer(deal.id(), partner, other == null ? "?" : other.name(), player, weSell, deal.item(), deal.count(),
-                    price, worth, free, need));
+                    price, worth, free, need, deal.periodDays()));
         }
     }
 

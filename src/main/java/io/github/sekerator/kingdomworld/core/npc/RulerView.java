@@ -53,9 +53,19 @@ public final class RulerView {
      * @param worth  what the goods of a delivery are worth on the market of the ruler
      * @param free   how many of the goods the storehouses can spare (when selling)
      * @param need   how many the kingdom lacks (when buying)
+     * @param periodDays days between deliveries of a regular deal, 0 for a deal of one delivery
      */
     public record Offer(long deal, UUID partner, String partnerName, boolean player, boolean weSell, String item, int count, long price,
-                        long worth, long free, long need) {
+                        long worth, long free, long need, int periodDays) {
+        public Offer(long deal, UUID partner, String partnerName, boolean player, boolean weSell, String item, int count, long price,
+                     long worth, long free, long need) {
+            this(deal, partner, partnerName, player, weSell, item, count, price, worth, free, need, 0);
+        }
+
+        /** Deliveries of the deal in a week: one for a deal of one delivery. */
+        public long weekly() {
+            return periodDays <= 0 ? 1 : (6 + periodDays) / periodDays;
+        }
     }
 
     /**
