@@ -108,6 +108,15 @@ public final class CapitalRepair {
      * @return the settlements to be completed
      */
     public static int settlementsOnStart(MinecraftServer server) {
+        return settlements(server, false);
+    }
+
+    /**
+     * Looks at the settlements that stand, those looked at before too if an operator asks.
+     *
+     * @return the settlements to be completed
+     */
+    public static int settlements(MinecraftServer server, boolean again) {
         if (NpcWork.isReadOnly(server)) {
             return 0;
         }
@@ -116,7 +125,7 @@ public final class CapitalRepair {
             if (settlement.status() != io.github.sekerator.kingdomworld.core.npc.Settlement.Status.STANDING
                     || settlement.tier() == io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL
                     || !settlement.given(io.github.sekerator.kingdomworld.core.npc.Settlement.GIVEN_LIVING)
-                    || settlement.given(io.github.sekerator.kingdomworld.core.npc.Settlement.GIVEN_REPAIRED)
+                    || !again && settlement.given(io.github.sekerator.kingdomworld.core.npc.Settlement.GIVEN_REPAIRED)
                     || KingdomWorldApi.kingdom(server, settlement.kingdomId()).isEmpty()) {
                 continue;
             }

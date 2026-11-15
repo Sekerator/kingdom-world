@@ -231,6 +231,10 @@ public final class NpcCommands {
         }
         int count = raised;
         source.sendSuccess(() -> Component.translatable(ADMIN + "repair.done", count), true);
+        if (siteId.isEmpty()) {
+            int completed = CapitalRepair.settlements(server, true);
+            source.sendSuccess(() -> Component.translatable(ADMIN + "repair.settlements", completed), true);
+        }
         return count;
     }
 

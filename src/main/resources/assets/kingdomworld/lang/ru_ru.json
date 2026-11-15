@@ -3663,6 +3663,7 @@
   "commands.kingdomworld.admin.npc.repair.resumed": "подъём остановился на полпути и продолжится",
   "commands.kingdomworld.admin.npc.repair.none": "Нет такого места королевства мира",
   "commands.kingdomworld.admin.npc.repair.done": "Столиц достраивается: %s; они поднимаются в фоне или сразу, когда рядом игрок",
+  "commands.kingdomworld.admin.npc.repair.settlements": "Поселений достраивается: %s",
   "kingdomworld.screen.throne.npc.size.hint": "Появилось вместе с миром, им правит не игрок",
   "kingdomworld.life.count.days.n1": "%s день",
   "kingdomworld.life.count.days.n21": "%s день",

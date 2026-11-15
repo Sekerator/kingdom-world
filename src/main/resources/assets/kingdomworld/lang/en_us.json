@@ -3663,6 +3663,7 @@
   "commands.kingdomworld.admin.npc.repair.resumed": "its raising stopped half way and goes on",
   "commands.kingdomworld.admin.npc.repair.none": "No such place of a kingdom of the world",
   "commands.kingdomworld.admin.npc.repair.done": "Capitals raised again: %s; they rise in the background or at once when a player comes near",
+  "commands.kingdomworld.admin.npc.repair.settlements": "Settlements completed: %s",
   "kingdomworld.screen.throne.npc.size.hint": "It arose together with the world; no player rules it",
   "kingdomworld.life.count.days.n1": "%s day",
   "kingdomworld.life.count.days.n21": "%s days",
