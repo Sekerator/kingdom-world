@@ -800,6 +800,16 @@ public final class RoadPlanning {
                     RoadTexts.className(road.roadClass()), RoadTexts.blocks(road.length())).withStyle(ChatFormatting.GREEN));
         }
         for (Crossing crossing : sent) {
+            double[] works = plan.levelled() && plan.estimate() != null ? plan.estimate().foreign().get(crossing.owner()) : null;
+            if (works != null) {
+                // The works on the land of the kingdom asked, in days of its builders and miners.
+                RoadWork.notify(server, crossing.owner(), Component.translatable(RoadWork.KEY + "crossing_asked_levelled",
+                        RoadWork.kingdomName(server, kingdomId), RoadTexts.sections(crossing.sections()), RoadTexts.mode(crossing.mode()),
+                        String.format(java.util.Locale.ROOT, "%.1f", works[0] / io.github.sekerator.kingdomworld.core.road.EarthRules.DAY),
+                        String.format(java.util.Locale.ROOT, "%.1f", works[1] / io.github.sekerator.kingdomworld.core.road.EarthRules.DAY))
+                        .withStyle(ChatFormatting.GOLD));
+                continue;
+            }
             RoadWork.notify(server, crossing.owner(), Component.translatable(RoadWork.KEY + "crossing_asked",
                     RoadWork.kingdomName(server, kingdomId), RoadTexts.sections(crossing.sections()),
                     RoadTexts.mode(crossing.mode())).withStyle(ChatFormatting.GOLD));

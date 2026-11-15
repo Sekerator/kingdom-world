@@ -428,7 +428,45 @@ public final class RoadViews {
      * @param missing   items of each material the kingdom's part still takes
      */
     public record RoadRow(long id, String from, String to, RoadClass roadClass, int length, int built, int condition, Road.Status status,
-                          boolean paused, boolean ours, String partners, Road.Mode mode, int worn, int repairing, int[] missing) {
+                          boolean paused, boolean ours, String partners, Road.Mode mode, int worn, int repairing, int[] missing,
+                          Levelled levelled) {
+        public RoadRow(long id, String from, String to, RoadClass roadClass, int length, int built, int condition, Road.Status status,
+                       boolean paused, boolean ours, String partners, Road.Mode mode, int worn, int repairing, int[] missing) {
+            this(id, from, to, roadClass, length, built, condition, status, paused, ours, partners, mode, worn, repairing, missing, null);
+        }
+
+        /**
+         * What a levelled road shows besides: how much of it is levelled, the days of work left, the miners helping, the columns in
+         * the way with the first places and why, and the gates ordered for it.
+         *
+         * @param levelled       thousandths of its earthworks paid for
+         * @param builderDays    tenths of days of builders left; {@code minerDays} of miners
+         * @param blockedAt      the first places in the way, x, y and z side by side
+         * @param blockedWhy     why each of them waits
+         */
+        public record Levelled(int levelled, int builderDays, int minerDays, int helpers, int blocked, int[] blockedAt, List<String> blockedWhy,
+                               int gates) {
+            public Levelled {
+                blockedWhy = List.copyOf(blockedWhy);
+            }
+
+            void encode(FriendlyByteBuf buf) {
+                buf.writeVarInt(levelled);
+                buf.writeVarInt(builderDays);
+                buf.writeVarInt(minerDays);
+                buf.writeVarInt(helpers);
+                buf.writeVarInt(blocked);
+                writeInts(buf, blockedAt);
+                writeList(buf, blockedWhy, (b, why) -> b.writeUtf(why, 32));
+                buf.writeVarInt(gates);
+            }
+
+            static Levelled decode(FriendlyByteBuf buf) {
+                return new Levelled(buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), readInts(buf, 9),
+                        readList(buf, 3, b -> b.readUtf(32)), buf.readVarInt());
+            }
+        }
+
         void encode(FriendlyByteBuf buf) {
             buf.writeVarLong(id);
             buf.writeUtf(from, NAME);
@@ -445,13 +483,18 @@ public final class RoadViews {
             buf.writeVarInt(worn);
             buf.writeVarInt(repairing);
             writeInts(buf, missing);
+            buf.writeBoolean(levelled != null);
+            if (levelled != null) {
+                levelled.encode(buf);
+            }
         }
 
         static RoadRow decode(FriendlyByteBuf buf) {
             return new RoadRow(buf.readVarLong(), buf.readUtf(NAME), buf.readUtf(NAME), readEnum(buf, RoadClass.class), buf.readVarInt(),
                     buf.readVarInt(), buf.readVarInt(), readEnum(buf, Road.Status.class), buf.readBoolean(), buf.readBoolean(), buf.readUtf(NAME),
                     readEnum(buf, Road.Mode.class), buf.readVarInt(), buf.readVarInt(),
-                    readInts(buf, io.github.sekerator.kingdomworld.core.road.RoadLayout.Material.values().length));
+                    readInts(buf, io.github.sekerator.kingdomworld.core.road.RoadLayout.Material.values().length),
+                    buf.readBoolean() ? Levelled.decode(buf) : null);
         }
     }
 
@@ -565,7 +608,15 @@ public final class RoadViews {
                               List<CityRow> cities, List<RoadRow> roads, List<CrossingRow> crossings, List<CampRow> camps, List<RiskRow> risks,
                               List<SquadRow> squads, int cityDistance, int townPeople, int townBuildings, int cityPeople, int cityBuildings,
                               boolean king, long allowance, long spentToday, int governed, @Nullable TradeViews.Currency currency,
-                              boolean treasurer) {
+                              boolean treasurer, boolean minersHelp) {
+        public RoadTabView(UUID kingdomId, boolean canManage, boolean canOrder, int builders, int maxCities, int maxRoads, List<CityRow> cities,
+                           List<RoadRow> roads, List<CrossingRow> crossings, List<CampRow> camps, List<RiskRow> risks, List<SquadRow> squads,
+                           int cityDistance, int townPeople, int townBuildings, int cityPeople, int cityBuildings, boolean king, long allowance,
+                           long spentToday, int governed, @Nullable TradeViews.Currency currency, boolean treasurer) {
+            this(kingdomId, canManage, canOrder, builders, maxCities, maxRoads, cities, roads, crossings, camps, risks, squads, cityDistance,
+                    townPeople, townBuildings, cityPeople, cityBuildings, king, allowance, spentToday, governed, currency, treasurer, true);
+        }
+
         public RoadTabView(UUID kingdomId, boolean canManage, boolean canOrder, int builders, int maxCities, int maxRoads, List<CityRow> cities,
                            List<RoadRow> roads, List<CrossingRow> crossings, List<CampRow> camps, List<RiskRow> risks, List<SquadRow> squads,
                            int cityDistance, int townPeople, int townBuildings, int cityPeople, int cityBuildings) {
@@ -621,6 +672,7 @@ public final class RoadViews {
                 currency.encode(buf);
             }
             buf.writeBoolean(treasurer);
+            buf.writeBoolean(minersHelp);
         }
 
         public static RoadTabView decode(FriendlyByteBuf buf) {
@@ -628,7 +680,8 @@ public final class RoadViews {
                     readList(buf, MAX_ROWS, CityRow::decode), readList(buf, MAX_ROWS, RoadRow::decode), readList(buf, MAX_ROWS, CrossingRow::decode),
                     readList(buf, MAX_ROWS, CampRow::decode), readList(buf, MAX_ROWS, RiskRow::decode), readList(buf, MAX_ROWS, SquadRow::decode),
                     buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readVarLong(),
-                    buf.readVarLong(), buf.readVarInt(), buf.readBoolean() ? TradeViews.Currency.decode(buf) : null, buf.readBoolean());
+                    buf.readVarLong(), buf.readVarInt(), buf.readBoolean() ? TradeViews.Currency.decode(buf) : null, buf.readBoolean(),
+                    buf.readBoolean());
         }
     }
 

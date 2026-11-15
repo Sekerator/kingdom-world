@@ -206,7 +206,8 @@ public final class RoadActions {
                 rules.townBuildings(), rules.cityPeople(), rules.cityBuildings(), viewer == null || viewer.equals(kingdom.get().rulerId()),
                 GovernorFunds.allowance(server, kingdomId), GovernorFunds.spentToday(server, kingdomId), CityGovernors.governed(server, kingdomId),
                 io.github.sekerator.kingdomworld.common.trade.Purses.currency(server, kingdomId).orElse(null),
-                viewer == null || world.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_TREASURY)));
+                viewer == null || world.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_TREASURY),
+                RoadWork.state(server).minersHelp(kingdomId)));
     }
 
     private static int countRoads(RoadState roads, Endpoint.Kind kind, long city, @Nullable UUID kingdom) {
@@ -249,7 +250,61 @@ public final class RoadActions {
         int built = road.units() == 0 ? 1000 : (int) Math.round(1000.0 * road.paid() / road.units());
         return new RoadViews.RoadRow(road.id(), endpointName(server, road.from()), endpointName(server, road.to()), road.roadClass(), road.length(),
                 built, (int) Math.round(road.condition() * 1000), road.status(), road.paused(), road.kingdomId().equals(kingdomId),
-                String.join(", ", partners), road.mode(), worn, repairing, missing);
+                String.join(", ", partners), road.mode(), worn, repairing, missing, road.levelled() ? levelled(server, road, kingdomId) : null);
+    }
+
+    /**
+     * What the row of a levelled road shows besides: levelled, the work left, the miners helping, the columns in the way, the gates.
+     */
+    static RoadViews.RoadRow.Levelled levelled(MinecraftServer server, Road road, UUID kingdomId) {
+        io.github.sekerator.kingdomworld.core.road.RoadRules rules = RoadSettings.rules();
+        io.github.sekerator.kingdomworld.core.road.EarthRules earth = RoadSettings.earth();
+        double builders = 0;
+        double miners = 0;
+        for (Road.Section section : road.sections()) {
+            if (!section.builder().equals(kingdomId)) {
+                continue;
+            }
+            java.util.List<io.github.sekerator.kingdomworld.core.road.RoadLayout.Block> blocks = road.blocksOf(section);
+            for (int i = section.paid(); i < blocks.size(); i++) {
+                io.github.sekerator.kingdomworld.core.road.ColumnWork work = io.github.sekerator.kingdomworld.core.road.ColumnWork.of(blocks.get(i),
+                        road.roadClass(), rules, earth);
+                builders += work.builders();
+                miners += work.miners();
+            }
+            builders = Math.max(0, builders - section.builderWork());
+            miners = Math.max(0, miners - section.minerWork());
+        }
+        java.util.List<RoadEarthworks.Blocked> blocked = RoadEarthworks.blocked(road.id());
+        int shown = Math.min(3, blocked.size());
+        int[] at = new int[shown * 3];
+        java.util.List<String> why = new java.util.ArrayList<>();
+        for (int i = 0; i < shown; i++) {
+            RoadEarthworks.Blocked place = blocked.get(i);
+            at[i * 3] = place.x();
+            at[i * 3 + 1] = place.y();
+            at[i * 3 + 2] = place.z();
+            why.add(place.hold().id());
+        }
+        // Gates of the walls of the cities of the kingdom the road goes through.
+        java.util.Set<Long> columns = new java.util.HashSet<>();
+        for (io.github.sekerator.kingdomworld.core.road.RouteCell cell : road.cells()) {
+            columns.add(io.github.sekerator.kingdomworld.core.road.LandSnapshot.column(cell.x(), cell.z()));
+        }
+        int gates = 0;
+        for (io.github.sekerator.kingdomworld.core.road.Wall wall : RoadWork.state(server).walls()) {
+            if (!wall.kingdomId().equals(road.kingdomId()) || !wall.dimension().equals(road.dimension())) {
+                continue;
+            }
+            for (int gate : wall.gates()) {
+                io.github.sekerator.kingdomworld.core.road.RouteCell cell = wall.cells().get(gate);
+                if (columns.contains(io.github.sekerator.kingdomworld.core.road.LandSnapshot.column(cell.x(), cell.z()))) {
+                    gates++;
+                }
+            }
+        }
+        return new RoadViews.RoadRow.Levelled((int) Math.round(road.levelledShare() * 1000), (int) Math.round(builders / 120.0),
+                (int) Math.round(miners / 120.0), RoadCrews.helpers(kingdomId), blocked.size(), at, why, gates);
     }
 
     static RoadViews.RiskRow riskRow(MinecraftServer server, Deal deal, UUID kingdomId) {
@@ -336,6 +391,15 @@ public final class RoadActions {
         }
         RoadState roads = RoadWork.state(server);
         return switch (change.action()) {
+            case MINERS_HELP -> {
+                boolean help = change.second() != 0;
+                Outcome outcome = RoadWork.change(server, "miners on roads", state -> {
+                    state.setMinersHelp(kingdom, help);
+                    return Outcome.DONE;
+                });
+                yield outcome.ok() ? KingdomActions.Feedback.ok(KEY + (help ? "miners_on" : "miners_off"))
+                        : KingdomActions.Feedback.error(outcome.error());
+            }
             case REPAIR -> {
                 Optional<Road> road = roads.road(change.first());
                 if (road.isEmpty() || !road.get().builders().contains(kingdom)) {

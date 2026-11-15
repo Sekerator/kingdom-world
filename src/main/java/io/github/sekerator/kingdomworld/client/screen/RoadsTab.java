@@ -466,6 +466,13 @@ final class RoadsTab {
                 screen.add(box);
                 Button set = screen.add(Button.builder(Component.translatable(KEY + "allowance_set"), b -> setAllowance())
                         .bounds(boxX + BOX + GAP, y, setWidth, ROW - 2).build());
+                // Whether the miners help with the rock of the levelled roads.
+                Component miners = Component.translatable(KEY + "miners", Component.translatable(view.minersHelp() ? KEY + "yes" : KEY + "no"));
+                int minersWidth = Math.min(right - x, screen.buttonWidth(miners));
+                Button help = screen.add(Button.builder(miners, b -> send(RoadPackets.TabChange.Action.MINERS_HELP, 0, view.minersHelp() ? 0 : 1))
+                        .bounds(x, y + 2 * ROW + GAP, minersWidth, ROW - 2).build());
+                help.active = view.canManage();
+                help.setTooltip(Tooltip.create(Component.translatable(KEY + "miners_hint")));
                 set.active = view.treasurer() && view.currency() != null;
                 set.setTooltip(Tooltip.create(Component.translatable(view.treasurer() ? KEY + "allowance_hint" : KEY + "allowance_no_right")));
             }
@@ -759,6 +766,10 @@ final class RoadsTab {
         } else if (row.paused()) {
             state = Component.translatable(KEY + "paused_state");
             color = 0xFFB8B8B8;
+        } else if (row.status() == Road.Status.BUILDING && row.levelled() != null) {
+            state = Component.translatable(KEY + "building_levelled", TradeTexts.percent(permille(row.built())),
+                    TradeTexts.percent(permille(row.levelled().levelled())));
+            color = row.levelled().blocked() > 0 ? 0xFFFF9070 : 0xFFF0D070;
         } else if (row.status() == Road.Status.BUILDING) {
             state = Component.translatable(KEY + "building", TradeTexts.percent(permille(row.built())));
             color = 0xFFF0D070;
@@ -772,11 +783,40 @@ final class RoadsTab {
                 RoadTexts.blocks(row.length()), RoadTexts.mode(row.mode()), row.partners().isEmpty() ? Component.translatable(KEY + "nobody")
                         : Component.literal(row.partners()), RoadTexts.sections(row.worn()), RoadTexts.sections(row.repairing()),
                 RoadTexts.items(row.missing()[0]), RoadTexts.items(row.missing()[1]), RoadTexts.items(row.missing()[2]));
+        if (row.levelled() != null) {
+            hint = levelledHint(row, hint);
+        }
         Component kind = Component.translatable(KEY + "road_kind", RoadTexts.className(row.roadClass()), RoadTexts.blocks(row.length()));
         int kindWidth = Math.min(screen.font().width(kind), Math.max(0, (textRight - x - stateWidth) / 2));
         text(graphics, head, x, y + 4, row.ours() ? 0xFFFFFFFF : 0xFFD0D0F0, textRight - x - stateWidth - kindWidth - 12, hint);
         text(graphics, kind, textRight - stateWidth - kindWidth - 6, y + 4, 0xFFB8B8B8, kindWidth, null);
         text(graphics, state, textRight - stateWidth, y + 4, color, stateWidth, null);
+    }
+
+    /**
+     * The hint of a levelled road: levelled, the work left, what its other materials still need, the miners helping, the columns in
+     * the way with the first places, the gates ordered.
+     */
+    private static Component levelledHint(RoadViews.RoadRow row, Component hint) {
+        RoadViews.RoadRow.Levelled levelled = row.levelled();
+        net.minecraft.network.chat.MutableComponent text = Component.empty().append(hint).append(" ").append(Component.translatable(KEY + "levelled_hint",
+                TradeTexts.percent(permille(levelled.levelled())), String.format(java.util.Locale.ROOT, "%.1f", levelled.builderDays() / 10.0),
+                String.format(java.util.Locale.ROOT, "%.1f", levelled.minerDays() / 10.0), levelled.helpers(), levelled.gates()));
+        int[] missing = row.missing();
+        io.github.sekerator.kingdomworld.core.road.RoadLayout.Material[] materials = io.github.sekerator.kingdomworld.core.road.RoadLayout.Material.values();
+        for (int m = 3; m < materials.length && m < missing.length; m++) {
+            if (missing[m] > 0) {
+                text.append(" ").append(Component.translatable(KEY + "levelled_needs", RoadTexts.material(materials[m]), RoadTexts.items(missing[m])));
+            }
+        }
+        if (levelled.blocked() > 0) {
+            text.append(" ").append(Component.translatable(KEY + "blocked", levelled.blocked()));
+            for (int i = 0; i < levelled.blockedWhy().size() && i * 3 + 2 < levelled.blockedAt().length; i++) {
+                text.append(" ").append(Component.translatable(KEY + "blocked_at", levelled.blockedAt()[i * 3], levelled.blockedAt()[i * 3 + 1],
+                        levelled.blockedAt()[i * 3 + 2], Component.translatable("kingdomworld.road.hold." + levelled.blockedWhy().get(i))));
+            }
+        }
+        return text;
     }
 
     private void renderCrossing(GuiGraphics graphics, int x, int textRight, int y, RoadViews.CrossingRow row) {

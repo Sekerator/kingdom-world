@@ -69,10 +69,14 @@ final class RoadLayoutCases {
             Road.Status[] statuses = Road.Status.values();
             for (int i = 0; i < 20; i++) {
                 Road.Status status = statuses[i % statuses.length];
+                // Every other road is levelled, some with columns in the way.
+                RoadViews.RoadRow.Levelled levelled = i % 2 == 0 ? null : new RoadViews.RoadRow.Levelled(i * 40, 99_999, 99_999, 999,
+                        i % 4 == 1 ? 9_999 : 0, new int[]{-29_999_999, -64, 29_999_999, -29_999_999, 320, 29_999_999, 1, 2, 3},
+                        i % 4 == 1 ? List.of("made_block", "no_lining", "other_road") : List.of(), 9);
                 roads.add(new RoadViews.RoadRow(MUCH - i, LONG_CITY, i % 2 == 0 ? Component.translatable("kingdomworld.road.capital_of", LONG_KINGDOM)
-                        .getString() : "точка -29999999 29999999", RoadClass.values()[i % 3], 8_192, i * 50, 1000 - i * 50, status, i % 5 == 4,
+                        .getString() : "точка -29999999 29999999", RoadClass.values()[i % 3], 32_768, i * 50, 1000 - i * 50, status, i % 5 == 4,
                         i % 3 != 2, i % 3 == 2 ? LONG_KINGDOM + ", " + LONG_KINGDOM : "", Road.Mode.values()[i % 3], 512, 512,
-                        new int[]{999_999, 999_999, 999_999}));
+                        new int[]{999_999, 999_999, 999_999, 999_999, 999_999, 999_999, 999_999}, levelled));
             }
             Crossing.Status[] states = Crossing.Status.values();
             for (int i = 0; i < 12; i++) {
@@ -254,6 +258,8 @@ final class RoadLayoutCases {
         add.accept("throne-roads-cities-subject", () -> roadsTab(member, Role.SUBJECT, false, false, "cities", 0, 0, Component.empty()));
         add.accept("throne-roads-cities-empty", () -> roadsTab(member, Role.SUBJECT, false, true, "cities", 0, 0, Component.empty()));
         add.accept("throne-roads-roads", () -> roadsTab(member, Role.KING, true, false, "roads", 0, 0, Component.empty()));
+        add.accept("throne-roads-row-levelled", () -> roadsTab(member, Role.KING, true, false, "roads", 0, 0, Component.empty()));
+        add.accept("throne-roads-miners-toggle", () -> roadsTab(member, Role.KING, true, false, "overview", 0, 0, Component.empty()));
         add.accept("throne-roads-roads-subject", () -> roadsTab(member, Role.SUBJECT, false, false, "roads", 0, 0, longError));
         add.accept("throne-roads-roads-empty", () -> roadsTab(member, Role.KING, true, true, "roads", 0, 0, Component.empty()));
         add.accept("throne-roads-actions", () -> roadsTab(member, Role.KING, true, false, "roads", MUCH, 0, Component.empty()));

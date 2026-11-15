@@ -97,7 +97,9 @@ public final class RoadPackets {
             /** The governor of the city stops ({@code second} 1) or goes on (0). */
             GOVERNOR_PAUSE,
             /** What the king gives the governors of all cities a day ({@code second}). */
-            GOVERNOR_ALLOWANCE
+            GOVERNOR_ALLOWANCE,
+            /** The miners of the kingdom help with the rock of its roads ({@code second} 1) or not (0). */
+            MINERS_HELP
         }
 
         public TabChange {
