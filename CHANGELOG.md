@@ -2,6 +2,20 @@
 
 ## Русский
 
+### 1.6.2
+
+Плавильщик и повар работают партиями и топят сразу все печи своей зоны, а мастерские ходят на склад за ингредиентами на всю партию.
+
+- **Исправлено: плавильщик по одной руде.** Плавильщик брал со склада одну руду, даже если там лежал стак, нёс её к одной печи, ждал переплавки, относил один слиток на склад и шёл за следующей. Печей в зоне поста могло быть несколько, а горела одна, и стак руды переплавлялся полдня. Теперь работник берёт партию: столько, сколько ещё просит заказ (для своей работы в режиме «Сам и по заказам» сколько есть), сколько лежит на складах и в контейнере поста и сколько влезает в его сумку и в свободные печи (до стака ингредиента на печь).
+- **Все печи сразу.** Партия раскладывается поровну по всем свободным печам нужного вида в зоне поста: печам, плавильным печам или коптильням. Работник обходит свои печи и забирает готовое снизу по мере готовности, а не стоит у одной. Чем больше печей, тем быстрее: стак руды в трёх печах плавится втрое быстрее. Число печей у работника не ограничено.
+- **Топливо по времени горения.** В каждую печь работник кладёт столько топлива, сколько сгорит на её долю, за вычетом того, что уже лежит в печи: на стак сырого железа в трёх печах уходит 9 угля, а не 64.
+- **Печи не делятся.** Печь, которую ведёт один работник, другой не трогает, и печь с чужим предметом в выходе по-прежнему пропускается. Из погасшей печи работник после ожидания забирает остаток своего ингредиента и несёт его обратно на склад.
+- **Заказ продвигается постепенно.** Каждая вынутая из печи вещь сразу засчитывается заказу, опыту работника и учёту производства. На склад работник несёт готовое, когда партия кончилась или сумка полна.
+- **Партия переживает ночь.** Если рабочий день кончился посреди партии, печи горят дальше, а утром работник возвращается к ним и забирает готовое.
+- **Ручная работа партиями.** Ремесленник, кузнец, повар у верстака или костра и камнерез идут на склад за ингредиентами сразу на партию одного рецепта (до остатка заказа и места в сумке) и делают вещи одну за другой у станка. Время одной вещи прежнее.
+- **Вдали от игроков.** Вещи у печей делаются сразу на всех печах вида в зоне, поделённых между работниками поста: один работник с тремя печами делает три вещи за время одной плавки, как и рядом с игроками. Предел вещей за шаг симуляции растёт с числом печей, топливо по-прежнему считается по времени горения. Оценка выработки поста до замера тоже учитывает число печей.
+- Справочник (глава «Склады и мастерские», раздел «Мастерские») рассказывает об этом.
+
 ### 1.6.1
 
 Лесорубы снова рубят лес с земли, а работники опасной работы оставляют добычу игроков на складах.
@@ -311,6 +325,20 @@
 - **Нагрузка и баланс.** Замер нагрузки `admin perf`, тяжёлые места разнесены по тикам, жалование всех профессий по умолчанию.
 
 ## English
+
+### 1.6.2
+
+The smelter and the cook work in batches and keep all the furnaces of their zone burning at once, and workshops fetch the ingredients of a whole batch at once.
+
+- **Fixed: a smelter one ore at a time.** A smelter took one ore from the storehouse even where a stack lay, carried it to one furnace, waited for it to smelt, brought one ingot to the storehouse and went for the next. A post could have several furnaces in its zone and only one burned, so that a stack of ore took half a day. Now a worker takes a batch: as much as the order still asks for (for its own work in the mode "Own work and orders" as much as there is), as the storehouses and the container of the post hold and as fits into its bag and the free furnaces (up to a stack of the ingredient in each).
+- **All the furnaces at once.** A batch is spread evenly over all the free furnaces of the kind in the zone of the post: furnaces, blast furnaces or smokers. The worker goes round its furnaces and takes the results out from below as they come, rather than standing at one. The more furnaces, the faster: a stack of ore in three furnaces smelts in a third of the time. A worker tends any number of furnaces.
+- **Fuel by the time it burns.** A worker puts into each furnace as much fuel as its share burns, less what lies in the furnace already: a stack of raw iron in three furnaces burns 9 coal, not 64.
+- **Furnaces are not shared.** A furnace one worker tends the others leave alone, and a furnace with something else in its output is still passed over. From a furnace that went out the worker takes back what is left of its ingredient after a wait and brings it back to the storehouse.
+- **Orders move on thing by thing.** Every thing taken out of a furnace counts at once for the order, the experience of the worker and the record of production. The worker brings the results to the storehouse when the batch is done or its bag is full.
+- **A batch lasts the night.** When the day of work ends in the middle of a batch, the furnaces burn on, and in the morning the worker comes back to them and takes the results.
+- **Hand work in batches.** The crafter, the smith, the cook at a table or a campfire and the stonecutter go to the storehouse for the ingredients of a batch of one recipe at once (up to what the order still asks for and what fits into the bag) and make the things one after another at the workstation. One thing takes as long as before.
+- **Far from players.** Things at furnaces are made at all the furnaces of the kind in the zone at once, shared among the workers of the post: one worker with three furnaces makes three things in the time of one smelting, as near players. The most things a step of the simulation makes grows with the furnaces, and fuel is still counted by the time it burns. The estimate of the yield of a post before a measurement counts the furnaces too.
+- The guide (chapter "Storehouses and workshops", section "Workshops") tells about it.
 
 ### 1.6.1
 
