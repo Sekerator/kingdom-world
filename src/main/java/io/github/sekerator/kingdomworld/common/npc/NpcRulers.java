@@ -554,6 +554,8 @@ public final class NpcRulers {
         if (!poor) {
             RulerActions.posts(server, kingdom, view);
         }
+        // Swords for money in danger or at war, let go once the danger is past.
+        NpcHire.daily(server, id, view, rules);
         // The garrison: the fallen are replaced, the posts of officers filled and the soldiers put on their posts.
         NpcGarrison.daily(server, id);
         List<RulerDecision> fresh = new ArrayList<>();
