@@ -175,6 +175,9 @@ public final class Earthworks {
         BUILT.clear();
         BUILDING.clear();
         SURVEYS.clear();
+        wallColumns = null;
+        wallColumnsOf = null;
+        wallColumnsDimension = null;
     }
 
     static void forget(long construction) {
@@ -263,15 +266,150 @@ public final class Earthworks {
     }
 
     /**
-     * The height of the solid ground of a column: below trees, plants, snow and water.
+     * The height of the solid ground of a column: below trees, plants, snow and water, and below the blocks of a wall.
      */
     static int groundAt(ServerLevel level, int x, int z) {
         int y = surface(level, x, z) - 1;
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, y, z);
-        while (y > level.getMinBuildHeight() && soft(level.getBlockState(pos.setY(y)))) {
+        boolean wall = wallColumn(level, x, z);
+        while (y > level.getMinBuildHeight() && (soft(level.getBlockState(pos.setY(y))) || wall && wallBlock(level, pos))) {
             y--;
         }
         return y;
+    }
+
+    /**
+     * The height of the natural ground of a column around earthworks: below what {@link #groundAt} goes below, and below whatever
+     * somebody made (fences, slabs, planks, torches, the blocks of walls, buildings and roads), which is no land to meet.
+     */
+    static int naturalGroundAt(ServerLevel level, int x, int z) {
+        int y = surface(level, x, z) - 1;
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, y, z);
+        boolean wall = wallColumn(level, x, z);
+        while (y > level.getMinBuildHeight()) {
+            BlockState state = level.getBlockState(pos.setY(y));
+            if (!soft(state) && !made(level, pos, state) && !(wall && wallBlock(level, pos))) {
+                break;
+            }
+            y--;
+        }
+        return y;
+    }
+
+    /**
+     * Whether a block was made by somebody and never counts as land: a block holding something, a block of the mod, planks, slabs,
+     * stairs, fences, walls, doors, glass, bricks, signs, beds and the like, wall stone that is no natural rock, and anything less
+     * than a whole block that is neither rock nor earth (a torch, a lantern, a chain, a rail).
+     */
+    static boolean made(net.minecraft.world.level.BlockGetter level, BlockPos pos, BlockState state) {
+        if (state.isAir() || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        if (state.hasBlockEntity()) {
+            return true;
+        }
+        ResourceLocation id = net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(state.getBlock());
+        if (id != null && io.github.sekerator.kingdomworld.KingdomWorld.MOD_ID.equals(id.getNamespace())) {
+            return true;
+        }
+        if (state.is(BlockTags.PLANKS) || state.is(BlockTags.SLABS) || state.is(BlockTags.STAIRS) || state.is(BlockTags.FENCES)
+                || state.is(BlockTags.FENCE_GATES) || state.is(BlockTags.WALLS) || state.is(BlockTags.DOORS) || state.is(BlockTags.TRAPDOORS)
+                || state.is(BlockTags.ALL_SIGNS) || state.is(BlockTags.BANNERS) || state.is(BlockTags.BEDS) || state.is(BlockTags.WOOL)
+                || state.is(BlockTags.WOOL_CARPETS) || state.is(BlockTags.CANDLES) || state.is(BlockTags.STONE_BRICKS)
+                || state.is(net.minecraftforge.common.Tags.Blocks.GLASS) || state.is(net.minecraftforge.common.Tags.Blocks.GLASS_PANES)) {
+            return true;
+        }
+        boolean rock = MinerBehavior.isMinable(state) || fillItem(state) != null;
+        if (!rock && new ItemStack(state.getBlock().asItem()).is(io.github.sekerator.kingdomworld.common.road.CityWalls.WALL_STONE)) {
+            return true;
+        }
+        return !rock && !state.isCollisionShapeFullBlock(level, pos);
+    }
+
+    /**
+     * Which columns of a stretch of land walls, gates, buildings and roads of any kingdom stand on, laid out as the heights of
+     * {@link Earthwork#ground}: earthworks meet them flat.
+     */
+    static boolean[] structures(ServerLevel level, int fromX, int fromZ, int width, int length) {
+        boolean[] built = new boolean[width * length];
+        MinecraftServer server = level.getServer();
+        String dimension = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level);
+        Box area = new Box(fromX, level.getMinBuildHeight(), fromZ, fromX + width - 1, level.getMaxBuildHeight(), fromZ + length - 1);
+        for (long column : ways(server, area, dimension)) {
+            mark(built, fromX, fromZ, width, length, BlockPos.getX(column), BlockPos.getZ(column));
+        }
+        for (Wall wall : RoadWork.state(server).walls()) {
+            if (!wall.dimension().equals(dimension)) {
+                continue;
+            }
+            for (RouteCell cell : wall.cells()) {
+                mark(built, fromX, fromZ, width, length, cell.x(), cell.z());
+            }
+        }
+        for (Building building : KingdomWorldApi.state(server).construction().buildings()) {
+            Box box = building.box();
+            if (box == null || !building.anchor().dimension().equals(dimension) || !box.intersects(area)) {
+                continue;
+            }
+            for (int x = Math.max(fromX, box.minX()); x <= Math.min(fromX + width - 1, box.maxX()); x++) {
+                for (int z = Math.max(fromZ, box.minZ()); z <= Math.min(fromZ + length - 1, box.maxZ()); z++) {
+                    mark(built, fromX, fromZ, width, length, x, z);
+                }
+            }
+        }
+        return built;
+    }
+
+    private static void mark(boolean[] built, int fromX, int fromZ, int width, int length, int x, int z) {
+        int dx = x - fromX;
+        int dz = z - fromZ;
+        if (dx >= 0 && dz >= 0 && dx < width && dz < length) {
+            built[dz * width + dx] = true;
+        }
+    }
+
+    /** The columns walls stand on in a dimension, {x, 0, z} packed, as the roads and walls were at a version. */
+    private static Set<Long> wallColumns;
+    private static Object wallColumnsOf;
+    private static long wallColumnsVersion;
+    private static String wallColumnsDimension;
+
+    /**
+     * Whether a wall of any kingdom passes a column, its gates too.
+     */
+    static boolean wallColumn(ServerLevel level, int x, int z) {
+        io.github.sekerator.kingdomworld.core.road.RoadState state = RoadWork.state(level.getServer());
+        String dimension = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level);
+        if (wallColumns == null || wallColumnsOf != state || wallColumnsVersion != state.version() || !dimension.equals(wallColumnsDimension)) {
+            Set<Long> columns = new HashSet<>();
+            for (Wall wall : state.walls()) {
+                if (wall.dimension().equals(dimension)) {
+                    for (RouteCell cell : wall.cells()) {
+                        columns.add(BlockPos.asLong(cell.x(), 0, cell.z()));
+                    }
+                }
+            }
+            wallColumns = columns;
+            wallColumnsOf = state;
+            wallColumnsVersion = state.version();
+            wallColumnsDimension = dimension;
+        }
+        return wallColumns.contains(BlockPos.asLong(x, 0, z));
+    }
+
+    /**
+     * Whether a block belongs to a wall of any kingdom: placed by it, taken over from an older one, or standing in one of its
+     * columns.
+     */
+    static boolean wallBlock(ServerLevel level, BlockPos pos) {
+        String dimension = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level);
+        long at = pos.asLong();
+        for (Wall wall : RoadWork.state(level.getServer()).walls()) {
+            if (wall.dimension().equals(dimension) && (wall.placedHere(at) || wall.replaces(at) || wall.inColumn(at))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -320,8 +458,14 @@ public final class Earthworks {
         int[] ground = new int[(sizeX + 2) * (sizeZ + 2)];
         for (int dz = -1; dz <= sizeZ; dz++) {
             for (int dx = -1; dx <= sizeX; dx++) {
-                ground[(dz + 1) * (sizeX + 2) + dx + 1] = groundAt(level, minX + dx, minZ + dz);
+                boolean ring = dx == -1 || dz == -1 || dx == sizeX || dz == sizeZ;
+                // The land around is met at its natural ground: what somebody made there is no slope to meet.
+                ground[(dz + 1) * (sizeX + 2) + dx + 1] = ring ? naturalGroundAt(level, minX + dx, minZ + dz) : groundAt(level, minX + dx, minZ + dz);
             }
+        }
+        if (request.smooth()) {
+            // Smoothed edges meet walls, gates, buildings and roads flat at the height of the work.
+            ground = Earthwork.meetStructures(sizeX, sizeZ, request.target(), ground, structures(level, minX - 1, minZ - 1, sizeX + 2, sizeZ + 2));
         }
         int[] top = new int[sizeX * sizeZ];
         for (int dz = 0; dz < sizeZ; dz++) {
@@ -346,10 +490,11 @@ public final class Earthworks {
             return Survey.failed(KingdomError.EARTHWORK_TOO_MUCH);
         }
         Box area = new Box(minX, level.getMinBuildHeight(), minZ, maxX, level.getMaxBuildHeight(), maxZ);
-        Set<Long> ways = ways(server, area);
+        String dimension = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level);
+        Set<Long> ways = ways(server, area, dimension);
         List<Box> buildings = new ArrayList<>();
         for (Building building : KingdomWorldApi.state(server).construction().buildings()) {
-            if (building.box().intersects(area)) {
+            if (building.box() != null && building.anchor().dimension().equals(dimension) && building.box().intersects(area)) {
                 buildings.add(building.box());
             }
         }
@@ -461,8 +606,20 @@ public final class Earthworks {
      * The columns roads and walls of any kingdom take within a box, {x, 0, z} packed: earthworks leave them as they are.
      */
     static Set<Long> ways(MinecraftServer server, Box area) {
+        return ways(server, area, null);
+    }
+
+    /**
+     * The columns roads and walls of any kingdom take within a box of a dimension, {x, 0, z} packed.
+     *
+     * @param dimension the dimension, or {@code null} for all of them
+     */
+    static Set<Long> ways(MinecraftServer server, Box area, @Nullable String dimension) {
         Set<Long> taken = new HashSet<>();
         for (Road road : RoadWork.state(server).roads()) {
+            if (dimension != null && !road.dimension().equals(dimension)) {
+                continue;
+            }
             for (RouteCell cell : road.cells()) {
                 if (cell.x() >= area.minX() - 2 && cell.x() <= area.maxX() + 2 && cell.z() >= area.minZ() - 2 && cell.z() <= area.maxZ() + 2) {
                     for (int dx = -1; dx <= 1; dx++) {
@@ -474,6 +631,9 @@ public final class Earthworks {
             }
         }
         for (Wall wall : RoadWork.state(server).walls()) {
+            if (dimension != null && !wall.dimension().equals(dimension)) {
+                continue;
+            }
             for (RouteCell cell : wall.cells()) {
                 if (cell.x() >= area.minX() && cell.x() <= area.maxX() && cell.z() >= area.minZ() && cell.z() <= area.maxZ()) {
                     taken.add(BlockPos.asLong(cell.x(), 0, cell.z()));
@@ -737,6 +897,10 @@ public final class Earthworks {
      */
     static ConstructionWork.StepResult dig(ServerLevel level, Construction construction, BlockPos at, @Nullable LivingEntity breaker,
                                            List<ItemStack> drops, boolean free) {
+        if (wallColumn(level, at.getX(), at.getZ())) {
+            // A wall laid out since keeps its column: no log, stone or ground under it is dug.
+            return ConstructionWork.StepResult.DONE;
+        }
         BlockState state = level.getBlockState(at);
         if (!state.isAir() && !(state.getBlock() instanceof LiquidBlock)) {
             if (ConstructionWork.isProtected(level, at, state) || ConstructionWork.holdsItems(level, at)) {
@@ -771,6 +935,10 @@ public final class Earthworks {
     @Nullable
     static ConstructionWork.StepResult beforeFill(ServerLevel level, Construction construction, BlockPos at, @Nullable LivingEntity breaker,
                                                   List<ItemStack> drops, boolean free) {
+        if (wallColumn(level, at.getX(), at.getZ())) {
+            // No fill goes into the column of a wall or the opening of its gate.
+            return ConstructionWork.StepResult.DONE;
+        }
         BlockState there = level.getBlockState(at);
         if (there.isAir() || there.getBlock() instanceof LiquidBlock || there.canBeReplaced() && !there.hasBlockEntity() || Scaffolds.is(there)) {
             // A scaffold nobody stands on gives way to the fill as air does.

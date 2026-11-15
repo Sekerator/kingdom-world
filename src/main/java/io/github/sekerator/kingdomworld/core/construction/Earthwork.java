@@ -18,8 +18,9 @@ import java.util.Objects;
  * @param sizeX  its width, west to east
  * @param sizeZ  its length, north to south
  * @param target the height of the finished ground, the top block of the fill
- * @param smooth whether its edges slope one to one to the land around, so that no cliff is left
- * @param ground the height of the solid ground of every column of the rectangle and of the ring around it, row by row from the
+ * @param smooth whether its edges slope one to one to the land around, so that no cliff is left; next to a wall, a gate, a
+ *               building or a road the edge stays flat at the height of the work (see {@link #meetStructures})
+ * @param ground the height of the natural ground of every column of the rectangle and of the ring around it, row by row from the
  *               north west corner of the ring
  * @param top    the highest block of every column of the rectangle (trees and plants over the ground), row by row
  * @param dug    what the blocks the work digs make, by item: earth, stone, gravel and sand for the fill
@@ -63,6 +64,38 @@ public record Earthwork(int minX, int minZ, int sizeX, int sizeZ, Mode mode, int
         top = top.clone();
         dug = Map.copyOf(new LinkedHashMap<>(dug));
         stock = Map.copyOf(new LinkedHashMap<>(stock));
+    }
+
+    /**
+     * The heights of the ground of a rectangle and its ring where the ring meets walls, gates, buildings and roads: such a column
+     * of the ring, or one next to such a column of the edge of the rectangle, is taken at the height of the work, so that smoothed
+     * edges meet them flat at that height and neither ramp up against them nor cut under them. Nothing else changes.
+     *
+     * @param ground the heights, laid out as {@link #ground}
+     * @param built  whether a structure stands on each column, laid out the same way
+     * @return the heights to keep with the work
+     */
+    public static int[] meetStructures(int sizeX, int sizeZ, int target, int[] ground, boolean[] built) {
+        int width = sizeX + 2;
+        if (ground.length != width * (sizeZ + 2) || built.length != ground.length) {
+            throw new IllegalArgumentException("The heights do not fit the rectangle of the earthworks");
+        }
+        int[] result = ground.clone();
+        for (int dz = -1; dz <= sizeZ; dz++) {
+            for (int dx = -1; dx <= sizeX; dx++) {
+                boolean ring = dx == -1 || dz == -1 || dx == sizeX || dz == sizeZ;
+                if (!ring) {
+                    continue;
+                }
+                int inX = Math.max(0, Math.min(sizeX - 1, dx));
+                int inZ = Math.max(0, Math.min(sizeZ - 1, dz));
+                int index = (dz + 1) * width + dx + 1;
+                if (built[index] || built[(inZ + 1) * width + inX + 1]) {
+                    result[index] = target;
+                }
+            }
+        }
+        return result;
     }
 
     /**

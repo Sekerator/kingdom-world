@@ -217,20 +217,51 @@ the city and press **Actions**. The Construction right is needed.
 - The king orders a wall only when its ring lies wholly on the land of the kingdom. Otherwise the order is refused,
   saying how many chunks of the ring are not yours: claim the land around the city first.
 - It is built like a road: the free builders of the kingdom pay column after column from the storehouses, and a
-  column goes up in the world once its place is loaded. The wall breaks nothing and leaves trees as they are.
+  column goes up in the world once its place is loaded.
+- Before a column goes up, its place is cleared: a tree whose trunk stands in the line of the wall falls whole, and
+  leaves, grass, flowers, vines, saplings, snow and mushrooms in the line go. What is useful goes to the storehouses.
+- The wall breaks no block a player placed: it has a gap there, and the kingdom gets one message with the place.
+- A hole under the wall is always filled down to solid ground: first with what the wall dug itself, then with dirt,
+  then with cobblestone and cobbled deepslate from the storehouses. Without earth a column waits, and the kingdom
+  hears once a day that the wall needs earth. Walls of kingdoms of the world go up at once and are filled for free.
 - A finished wall and its gates are entered into the register of buildings as fortifications ("City wall" and
   "City gate") and count for the fortification of the kingdom. The integrity of the wall is checked once a minute
   while its place is loaded.
 - Upgrades, repairs, demolition and automatic repairs of the Construction tab are off for walls: the Roads tab
   keeps them. To mend a wall, order it again: the new wall only adds what is missing, the blocks standing stay,
   and what was paid for them goes back to the storehouses.
-- A new wall replaces the old one: a stone wall replaces a palisade, for example. What was paid and not placed
-  goes back to the storehouses.
+- A new wall replaces the old one: a stone wall replaces a palisade, for example. The new wall stands on the
+  ground, not on the blocks of the old one. The old wall is swapped column by column: its blocks of another class
+  are taken down to the storehouses, its blocks of the same class stay as blocks of the new wall. What of the old
+  wall is not where the new one goes up (in its gates, on an inner ring the city grew out of) comes down by itself
+  once its place is loaded, without builders. The gates of the old wall pass to the new one. What was paid and not
+  placed goes back to the storehouses.
+- If a wall already went up on another one (a palisade on a stone wall), order it again: a column of stone one
+  block thick under it is taken down, and the new wall stands on the ground.
+
+### The height of a wall
+
+The actions of a city have the row **Wall foot Y** above the buttons of the walls. An empty row means the wall
+follows the ground. With a height in it (or **Here** for the height you stand at), the lowest block of every column
+stands exactly at that height:
+
+- everything under the wall is filled with earth down to solid ground, water in its line too;
+- the natural ground above that height is cut to the surface, and the wall stands in a cut; the ground cut goes into
+  the fill so that less is carried, and what is left over goes to the storehouses;
+- the gates are levelled to the foot of the wall, and where the step from a gate to the land would be higher than a
+  block, a short ramp of earth or a cut is made before and after it;
+- filling and cutting go no deeper than earthworks may (the config earthworkMaxHeight): otherwise the wall is not
+  laid out, and the chat says why.
+
+Once the wall is laid out, the chat says how much earth to fill and how much ground to cut, and the heading of the
+actions of the city shows it while the wall stands.
 - On the atlas a wall is drawn as a ring with gates, dashed while it is being built.
 
 ### Gates
 
 - A gate opening three blocks wide appears by itself where a road crosses the wall when it is laid out.
+- A gate cuts every block of the walls in its columns, old and new, from the ground to the top. Where two walls
+  of the kingdom share a column, a gate cuts both.
 - **Cut a gate where I stand** cuts more (the Roads tab, the Cities view, Actions of any city). Stand by the
   wall, within 6 blocks of it, open the window with the Kingdom window key or the Kingdom button of the map
   and press the button: a gate is cut at the nearest place of the nearest wall of the kingdom, and the answer

@@ -529,7 +529,11 @@ the top row, and stick, string, stick in the second row. You need the right Cons
 - **Work**: "level to the height" (cut everything above and fill everything below), "cut down above the height" or
   "fill up to the height".
 - **Height Y**: at first the height of the first corner.
-- **Smooth the edges**: the edges of the plot slope down to the land around one to one, without cliffs.
+- **Smooth the edges** (off by default): the edges of the plot slope down to the land around one to one, without
+  cliffs. Next to walls, gates, buildings and roads the edge is not sloped: the floor meets them flat at the height of
+  the work. Without smoothing the floor is flat up to its edges.
+- The server takes the height of the land around at its natural ground: fences, slabs, planks, torches, the blocks of
+  walls, buildings and roads, logs and leaves are no land.
 
 The server counts and shows how many blocks to dig and to fill, whether there is material enough for the fill, how many
 places are left as they are and how much is left over for the storehouses or the spoil heap. The plane of the height and
@@ -549,7 +553,7 @@ builders wait).
 
 Never touched are blocks that hold something, blocks of the mod, buildings of the register, roads, walls, posts,
 anything made by hand and anything off the land of the kingdom: those places are left as they are, and the work shows
-them. Whatever is placed after the work is laid out stays too.
+them. Whatever is placed after the work is laid out stays too, and a wall laid out after the work keeps its columns: nothing is dug under it and nothing filled into its columns and gates.
 
 ### Limits and refusals
 

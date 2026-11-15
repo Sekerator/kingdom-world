@@ -34,7 +34,8 @@ public class EarthworkScreen extends KingdomScreen {
     private final BlockPos second;
     private Earthwork.Mode mode = Earthwork.Mode.LEVEL;
     private int target;
-    private boolean smooth = true;
+    /** Smoothed edges are asked for: by default the floor is flat to its edges. */
+    private boolean smooth = false;
     private int panelWidth;
     private EditBox heightBox;
     private Checkbox smoothBox;
