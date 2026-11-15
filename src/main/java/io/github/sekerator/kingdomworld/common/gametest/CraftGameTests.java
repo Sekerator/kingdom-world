@@ -350,4 +350,66 @@ public final class CraftGameTests {
         }
         helper.succeed();
     }
+
+    /**
+     * A stand of the load: the purchases of the crown of a kingdom of players with workshops of citizens of several trades and
+     * orders no workshop of the crown makes, which the crown looks for masters for at every step. It prints the average and the
+     * worst step and asks nothing of them.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_load_bench_crown", timeoutTicks = 400, required = false)
+    public static void theCrownLooksForMastersOfManyStuckOrders(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        UUID kingId = UUID.randomUUID();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Crown Load", kingId);
+        String[] trades = {"toolmaker", "bakery", "cookshop", "carpenter", "tailor", "mason", "glazier"};
+        String[] items = {"minecraft:oak_planks", "minecraft:stick", "minecraft:chest", "minecraft:bread", "minecraft:glass", "minecraft:torch",
+                "minecraft:stone_bricks", "minecraft:ladder", "minecraft:iron_sword", "minecraft:white_wool", "minecraft:cake",
+                "minecraft:cookie", "minecraft:barrel", "minecraft:bookshelf", "minecraft:crafting_table", "minecraft:furnace",
+                "minecraft:stone_slab", "minecraft:oak_fence", "minecraft:oak_door", "minecraft:glass_pane"};
+        try {
+            Economy economy = KingdomWorldApi.state(server).economy();
+            long day = TreasuryActions.day(server);
+            economy.adminTreasury(kingdom.id(), 1_000_000, day);
+            CitizenGameTests.storehouse(helper, 0, 0, 1).insertItem(0, new ItemStack(Items.OAK_LOG, 64), false);
+            ConstructionBook book = KingdomWorldApi.state(server).construction();
+            CommerceSavedData data = CommerceSavedData.get(server);
+            for (int i = 0; i < 21; i++) {
+                Building house = craftHouse(helper, kingdom, new BlockPos(3, 0, 3), new BlockPos(8, 3, 8));
+                Citizen master = CitizenLife.arriveInto(server, kingdom.id(), bed(helper, kingdom, 1 + i % 7 * 2, 10 + i / 7 * 3),
+                        bed(helper, kingdom, 1 + i % 7 * 2, 10 + i / 7 * 3), false).orElseThrow(() -> new IllegalStateException("No citizen came"));
+                WorldPos at = house.anchor();
+                Business.Place place = new Business.Place(Business.PlaceKind.CRAFT_HOUSE, house.id(), 0, at.dimension(), at.x(), at.y(), at.z());
+                data.putSurvey(place.key(), new CommerceSavedData.Survey(Set.of("crafting_table", "furnace", "smoker", "stonecutter"), day));
+                Business shop = data.open(kingdom.id(), 0, place, day, 200);
+                String trade = trades[i % trades.length];
+                shop.changeTrade(trade, day);
+                shop.setPinned(trade);
+                shop.setKeepers(List.of(master.id()), false);
+                master.setBusiness(shop.id());
+            }
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            state.orders().setBuying(kingdom.id(), new io.github.sekerator.kingdomworld.core.production.OrderBook.Buying(true, 200, 1_000_000L));
+            for (int i = 0; i < 40; i++) {
+                state.orders().add(kingdom.id(), items[i % items.length], Order.Kind.MAKE, 4 + i, Order.Priority.NORMAL,
+                        KingdomWorldApi.gameTime(server));
+            }
+            Production.plan(server, kingdom.id());
+            long total = 0;
+            long worst = 0;
+            int rounds = 20;
+            for (int i = 0; i < rounds; i++) {
+                long start = System.nanoTime();
+                CrownPurchases.step(server, kingdom.id());
+                long took = System.nanoTime() - start;
+                total += took;
+                worst = Math.max(worst, took);
+            }
+            com.mojang.logging.LogUtils.getLogger().info(String.format(java.util.Locale.ROOT, "Load bench: the purchases of the crown with %d "
+                    + "shops and %d orders: %.3f ms on average, %.3f ms at worst (%d rounds)", data.shopsOf(kingdom.id()).size(),
+                    state.orders().ordersOf(kingdom.id()).size(), total / 1e6 / rounds, worst / 1e6, rounds));
+        } finally {
+            CitizenGameTests.finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
 }

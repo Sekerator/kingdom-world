@@ -688,4 +688,70 @@ public final class BuildingGameTests {
         }
         helper.succeed();
     }
+
+    /**
+     * A stand of the load: the storehouses a worker of a kingdom with many of them looks at, nine warehouses of nine barrels and
+     * two dozen storehouses. It prints the average and the worst look and asks nothing of them.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_load_bench_storage", timeoutTicks = 400, required = false)
+    public static void theStorehousesOfAKingdomWithManyAreLookedAtQuickly(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Many Stores", UUID.randomUUID());
+        int[][] barrels = new int[9][];
+        for (int i = 0; i < 9; i++) {
+            barrels[i] = new int[]{i / 3, i % 3, 0};
+        }
+        BuildingTemplate warehouse = template("test_load_warehouse", BuildingRoles.WAREHOUSE, 1, "", List.of("minecraft:barrel[facing=up,open=false]"),
+                barrels);
+        try {
+            for (int x = 0; x < 3; x++) {
+                for (int z = 0; z < 3; z++) {
+                    build(helper, kingdom, warehouse, new BlockPos(1 + x * 4, 0, 1 + z * 4));
+                }
+            }
+            for (int x = 0; x < 12; x++) {
+                for (int z = 0; z < 2; z++) {
+                    CitizenGameTests.storehouse(helper, x, 3, z);
+                }
+            }
+            BuildingEffects.tick(server, 200);
+            UUID id = kingdom.id();
+            String dimension = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level);
+            BlockPos from = helper.absolutePos(new BlockPos(6, 1, 6));
+            io.github.sekerator.kingdomworld.core.citizen.WorldPos post = new io.github.sekerator.kingdomworld.core.citizen.WorldPos(dimension,
+                    from.getX(), from.getY(), from.getZ());
+            List<ItemStack> wheat = List.of(new ItemStack(Items.WHEAT, 32));
+            String farmer = io.github.sekerator.kingdomworld.core.citizen.Professions.FARMER.id();
+            bench("the storehouses", () -> KingdomStorage.storehouses(server, id, null).size());
+            bench("a storehouse for a farmer", () -> KingdomStorage.hasStorehouseFor(server, id, farmer));
+            bench("room for a farmer", () -> KingdomStorage.hasRoomFor(server, id, farmer, wheat));
+            bench("the storehouses to take from", () -> KingdomStorage.takingSources(level, id, post, from).size());
+            bench("the storehouses to bring to", () -> KingdomStorage.deliveryTargets(level, id, farmer, post, from, wheat).size());
+            bench("the count of the stock", () -> KingdomStorage.countsById(server, id).size());
+        } finally {
+            end(helper, kingdom, area[0], area[1], warehouse.id());
+        }
+        helper.succeed();
+    }
+
+    private static void bench(String what, java.util.function.Supplier<Object> work) {
+        int rounds = 2_000;
+        for (int i = 0; i < 20; i++) {
+            work.get();
+        }
+        long total = 0;
+        long worst = 0;
+        Object last = null;
+        for (int i = 0; i < rounds; i++) {
+            long start = System.nanoTime();
+            last = work.get();
+            long took = System.nanoTime() - start;
+            total += took;
+            worst = Math.max(worst, took);
+        }
+        com.mojang.logging.LogUtils.getLogger().info(String.format(java.util.Locale.ROOT, "Load bench: many storehouses, %s: %.4f ms on "
+                + "average, %.3f ms at worst (%d rounds; %s)", what, total / 1e6 / rounds, worst / 1e6, rounds, last));
+    }
 }

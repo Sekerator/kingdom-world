@@ -131,6 +131,7 @@ public final class LoadBenchGameTests {
                     workshops.add(post);
                 }
             }
+            workshops.sort(java.util.Comparator.comparing((WorkPost post) -> !Professions.SMELTER.id().equals(post.professionId())));
             if (!workshops.isEmpty()) {
                 WorkPost workshop = workshops.get(0);
                 UUID worker = workshop.workers().iterator().next();
@@ -209,6 +210,11 @@ public final class LoadBenchGameTests {
         NpcSite site = null;
         try {
             site = NpcGameTests.plant(helper, center, NpcLevel.LARGE);
+            // The composition of the place, worked out once for it: what the first tick of an appearance after a restart works out.
+            long composed = System.nanoTime();
+            io.github.sekerator.kingdomworld.common.npc.NpcSpawner.composition(site);
+            LOGGER.info(String.format(Locale.ROOT, "Load bench: the composition of a large kingdom of the world: %.3f ms",
+                    (System.nanoTime() - composed) / 1e6));
             // Up to the end of the wall: it is laid out and paid, none of it placed yet.
             for (int i = 0; i < NpcGameTests.LARGE_STEPS && site.status() == NpcSite.Status.SPAWNING && !wallPaid(server, site); i++) {
                 io.github.sekerator.kingdomworld.common.npc.NpcSpawner.runNow(server, site, 1);
@@ -221,12 +227,13 @@ public final class LoadBenchGameTests {
             for (io.github.sekerator.kingdomworld.core.road.Road.Section section : wall.sections()) {
                 columns += section.paid() - section.placed();
             }
-            // Before: what a second paid, at once.
+            // Before: what a second paid (up to 960 columns), at once; half of the wall, so that the other half is left for now.
+            int cap = Math.min(960, columns / 2);
             long start = System.nanoTime();
             int once = 0;
             for (io.github.sekerator.kingdomworld.core.road.Road.Section section : wall.sections()) {
-                once += io.github.sekerator.kingdomworld.common.road.CityWalls.placeSection(helper.getLevel(), wall, section, 960 - once);
-                if (once >= 960) {
+                once += io.github.sekerator.kingdomworld.common.road.CityWalls.placeSection(helper.getLevel(), wall, section, cap - once);
+                if (once >= cap) {
                     break;
                 }
             }
