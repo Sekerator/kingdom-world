@@ -61,8 +61,14 @@ public record NpcRules(boolean generate, int count, int radius, int minDistance,
     /** The most towns a kingdom is planned with. */
     public static final int MAX_TOWNS = 6;
 
+    /**
+     * The founding money of the versions before 1.6.3, in copper by size: 60, 150 and 400 gold. A config that still holds these
+     * holds the defaults of those versions rather than a choice, and the kingdoms founded with them get the difference once.
+     */
+    public static final long[] LEGACY_MONEY = {6000, 15000, 40000};
+
     public static final NpcRules DEFAULT = new NpcRules(true, 8, 6000, 1200, 1000, 12, new int[]{5, 0, 3}, new int[]{5, 3, 2},
-            new int[]{4, 6, 7}, new int[]{2, 3, 4}, 260, new long[]{6000, 15000, 40000}, 10, new int[]{4, 10, 16}, new int[]{2, 4, 8},
+            new int[]{4, 6, 7}, new int[]{2, 3, 4}, 260, new long[]{500_000, 2_000_000, 10_000_000}, 10, new int[]{4, 10, 16}, new int[]{2, 4, 8},
             2000, 4, 20, 60);
 
     /**

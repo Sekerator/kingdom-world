@@ -212,6 +212,10 @@ public final class NpcSettings {
         try {
             KingdomWorldConfig.NpcKingdoms c = KingdomWorldConfig.SERVER.npcKingdoms;
             int[] money = ints(c.startingMoney.get(), new int[]{(int) d.money()[0], (int) d.money()[1], (int) d.money()[2]});
+            if (money[0] == NpcRules.LEGACY_MONEY[0] && money[1] == NpcRules.LEGACY_MONEY[1] && money[2] == NpcRules.LEGACY_MONEY[2]) {
+                // The config file was written by an older version and keeps its defaults: the crowns of the world are rich now.
+                money = new int[]{(int) d.money()[0], (int) d.money()[1], (int) d.money()[2]};
+            }
             return new NpcRules(c.generate.get(), c.count.get(), c.radius.get(), c.minDistance.get(), c.minSpawnDistance.get(),
                     c.triggerChunks.get(), ints(c.sizeQuota.get(), d.sizeQuota()), ints(c.sizeWeights.get(), d.sizeWeights()),
                     ints(c.landRadius.get(), d.landRadius()),
