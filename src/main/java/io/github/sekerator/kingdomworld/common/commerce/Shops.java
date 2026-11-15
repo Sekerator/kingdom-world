@@ -238,6 +238,13 @@ public final class Shops {
         return ShopPricing.ceilingMilli(worth, Prices.importCost(worth, 1, TradeSettings.rules()));
     }
 
+    /**
+     * The worth of one of an item, in thousandths.
+     */
+    static long worthMilli(MinecraftServer server, Item item) {
+        return (long) Math.floor(worth(server, item) * ShopPricing.MILLI);
+    }
+
     static long ceilingMilli(MinecraftServer server, String id) {
         Item item = GoodsStacks.item(id);
         return item == null ? 0 : ceilingMilli(server, item);
@@ -248,7 +255,7 @@ public final class Shops {
      */
     static long askedMilli(MinecraftServer server, Business shop, String key, Business.Lot lot) {
         Item item = GoodsStacks.item(Business.itemOf(key));
-        return item == null ? Long.MAX_VALUE / 4 : ShopMaking.askedMilli(lot, shop.marginPermille(), ceilingMilli(server, item));
+        return item == null ? Long.MAX_VALUE / 4 : ShopMaking.askedMilli(lot, shop.marginPermille(), ceilingMilli(server, item), worthMilli(server, item));
     }
 
     /**
@@ -1307,7 +1314,7 @@ public final class Shops {
                 if (lot.category() != kind || lot.count() <= 0 || item == null) {
                     continue;
                 }
-                long price = ShopMaking.askedMilli(lot, shop.marginPermille(), ceilingMilli(server, item));
+                long price = ShopMaking.askedMilli(lot, shop.marginPermille(), ceilingMilli(server, item), worthMilli(server, item));
                 offers.add(new CityDay.Offer(shop.id(), entry.getKey(), kind, worth(server, item), price, lot.costMilli(), lot.count()));
             }
         }
@@ -1417,6 +1424,8 @@ public final class Shops {
                 continue;
             }
             Business shop = found.get();
+            // The work the crown paid for in advance is delivered before the day of the shop is counted.
+            CrownPurchases.deliverCommissions(server, shop, day);
             CityPurses.PurseKey till = CityPurses.PurseKey.till(kingdom, shop.id());
             long[] sold = SOLD.remove(shop.id());
             if (sold == null) {

@@ -24,6 +24,40 @@ public final class OrderBook {
     }
 
     private final Map<UUID, Book> books = new LinkedHashMap<>();
+    /** What each kingdom set for buying of its citizens; absent while it set nothing. */
+    private final Map<UUID, Buying> buying = new LinkedHashMap<>();
+
+    /**
+     * What a kingdom set for buying of its citizens what its workshops cannot make.
+     *
+     * @param on         whether it buys
+     * @param capPercent the most it pays, in percent of the worth
+     * @param perDay     the most it spends a day
+     */
+    public record Buying(boolean on, int capPercent, long perDay) {
+    }
+
+    public Optional<Buying> buying(UUID kingdomId) {
+        return Optional.ofNullable(buying.get(kingdomId));
+    }
+
+    public void setBuying(UUID kingdomId, Buying value) {
+        Buying before = value == null ? buying.remove(kingdomId) : buying.put(kingdomId, value);
+        if (!Objects.equals(before, value)) {
+            changed();
+        }
+    }
+
+    /**
+     * Restores what a kingdom set for buying of its citizens. Does not notify.
+     */
+    public void restoreBuying(UUID kingdomId, Buying value) {
+        if (value == null) {
+            buying.remove(kingdomId);
+        } else {
+            buying.put(kingdomId, value);
+        }
+    }
     private Runnable changeListener = () -> {
     };
 
@@ -188,7 +222,9 @@ public final class OrderBook {
     }
 
     public void removeKingdom(UUID kingdomId) {
-        if (books.remove(kingdomId) != null) {
+        boolean gone = books.remove(kingdomId) != null;
+        gone |= buying.remove(kingdomId) != null;
+        if (gone) {
             changed();
         }
     }

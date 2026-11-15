@@ -203,6 +203,8 @@ public final class CitizenSimulation {
             int infirmaryRoom = citizens.sites().count(kingdomId, SiteKinds.INFIRMARY) * rules.infirmaryCapacity();
             float hunger = CitizenNeeds.hunger(rules.dailyNutrition(), interval);
             Production.plan(server, kingdomId);
+            // What the workshops of the crown cannot make, the crown buys of the workshops of its citizens.
+            io.github.sekerator.kingdomworld.common.commerce.CrownPurchases.step(server, kingdomId);
             // Materials of constructions are set aside before workshops look for ingredients and fuel.
             io.github.sekerator.kingdomworld.common.construction.ConstructionWork.refreshReservations(server, kingdomId);
             List<UUID> ids = new ArrayList<>();

@@ -179,7 +179,9 @@ public final class TradePackets {
             SET_TAX,
             SET_FEE,
             /** Whether the crown sells goods to the shops of citizens: 1 or 0 in {@code first}. */
-            SET_SELL_TO_CITIZENS
+            SET_SELL_TO_CITIZENS,
+            /** Buy goods citizens made instead of importing them: the item, and how many in first. */
+            BUY_FROM_CITIZENS
         }
 
         public MarketChange {

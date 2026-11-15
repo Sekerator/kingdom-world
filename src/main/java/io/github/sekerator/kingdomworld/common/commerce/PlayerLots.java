@@ -54,7 +54,8 @@ public final class PlayerLots {
                 if (lot == null || lot.count() <= 0) {
                     continue;
                 }
-                long asked = ShopPricing.withTaxMilli(ShopMaking.askedMilli(lot, shop.marginPermille(), Shops.ceilingMilli(server, found)), tax);
+                long asked = ShopPricing.withTaxMilli(ShopMaking.askedMilli(lot, shop.marginPermille(), Shops.ceilingMilli(server, found),
+                        Shops.worthMilli(server, found)), tax);
                 best = best < 0 ? asked : Math.min(best, asked);
             }
         }

@@ -61,15 +61,22 @@ public final class OrderActions {
         OrderBook orders = state.orders();
         List<OrdersView.Entry> entries = new ArrayList<>();
         int limit = OrdersView.limit(ProductionSettings.rules().maxOrders());
+        io.github.sekerator.kingdomworld.common.commerce.CommerceSavedData commerce = io.github.sekerator.kingdomworld.common.commerce.CommerceSavedData
+                .get(server);
         for (Order order : orders.mainOrdersOf(kingdomId)) {
-            add(orders, kingdomId, order, 0, stock, entries, limit, new HashSet<>());
+            add(orders, kingdomId, order, 0, stock, entries, limit, new HashSet<>(), id -> commerce.boughtFor(kingdomId, id));
         }
+        OrderBook.Buying buying = io.github.sekerator.kingdomworld.common.commerce.CrownPurchases.buying(server, kingdomId);
+        long spent = io.github.sekerator.kingdomworld.common.commerce.CommerceSavedData.get(server)
+                .crownDay(kingdomId, io.github.sekerator.kingdomworld.common.economy.TreasuryActions.day(server))[0];
+        OrdersView.Buying settings = new OrdersView.Buying(io.github.sekerator.kingdomworld.common.commerce.CityOf.active(server, kingdomId),
+                buying.on(), buying.capPercent(), buying.perDay(), spent);
         return Optional.of(new OrdersView(kingdomId, state.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_PRODUCTION),
-                ProductionSettings.rules().maxOrders(), entries, state.kingOrders(kingdomId)));
+                ProductionSettings.rules().maxOrders(), entries, state.kingOrders(kingdomId), settings));
     }
 
     private static void add(OrderBook orders, UUID kingdomId, Order order, int depth, Map<String, Long> stock, List<OrdersView.Entry> into,
-                            int limit, Set<Long> seen) {
+                            int limit, Set<Long> seen, java.util.function.LongUnaryOperator bought) {
         if (into.size() >= limit || depth > OrdersView.MAX_DEPTH || !seen.add(order.id())) {
             return;
         }
@@ -82,9 +89,9 @@ public final class OrderActions {
             }
         }
         into.add(new OrdersView.Entry(order.id(), depth, sample(order.item()), order.kind(), order.amount(), progress, order.priority(),
-                order.paused(), order.status(), missing, order.workshop(), order.workshopStation()));
+                order.paused(), order.status(), missing, order.workshop(), order.workshopStation(), bought.applyAsLong(order.id())));
         for (Order child : orders.children(kingdomId, order.id())) {
-            add(orders, kingdomId, child, depth + 1, stock, into, limit, seen);
+            add(orders, kingdomId, child, depth + 1, stock, into, limit, seen, bought);
         }
     }
 
@@ -170,6 +177,8 @@ public final class OrderActions {
             case KIND -> simple(player, change, "change the kind of an order",
                     state -> state.setOrderKind(player.getUUID(), kingdom, change.order(), change.kind()), "kind_set");
             case UPDATE -> simple(player, change, "change an order", state -> update(state, player.getUUID(), change), "updated");
+            case SET_BUY_FROM_CITIZENS -> io.github.sekerator.kingdomworld.common.commerce.CrownPurchases.set(server, player.getUUID(), kingdom,
+                    "on".equals(change.item()), change.amount(), change.order());
         };
         KingdomActions.reply(player, feedback);
         sendView(player, kingdom);

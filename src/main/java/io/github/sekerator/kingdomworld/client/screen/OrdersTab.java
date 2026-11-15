@@ -59,6 +59,11 @@ final class OrdersTab {
     private CatalogView catalog;
     private Mode mode = Mode.LIST;
     private int scroll;
+    private int buyOnWidth;
+    private int buyCapWidth;
+    private int buyPerDayWidth;
+    /** The sums of a day the button of buying of citizens goes through. */
+    private static final long[] PER_DAY = {0, 100, 200, 300, 500, 1_000, 2_000, 5_000, 10_000, 50_000};
     private String search = "";
     private int searchTimer = -1;
     private int page;
@@ -141,6 +146,76 @@ final class OrdersTab {
         return Component.translatable(KEY + "summary", view.kingOrders(), view.maxOrders());
     }
 
+    // ---------------------------------------------------------------- buying of citizens
+
+    private static Component buyOnLabel(boolean on) {
+        return Component.translatable("kingdomworld.orders.buy_from_citizens." + (on ? "on" : "off"));
+    }
+
+    private static Component buyCapLabel(int percent) {
+        return Component.translatable("kingdomworld.orders.buy_from_citizens.cap", percent);
+    }
+
+    private Component buyPerDayLabel(long perDay) {
+        // In copper coins of the kingdom, as the config counts them.
+        return Component.translatable("kingdomworld.orders.buy_from_citizens.per_day", perDay);
+    }
+
+    /**
+     * Whether the list leaves the row at its bottom to buying of citizens: while the cities of the kingdom keep money.
+     */
+    private boolean buyingRow() {
+        return view != null && view.buying().active();
+    }
+
+    private int listRows(int top, int panelHeight) {
+        return Math.max(1, visibleRows(top, panelHeight) - (buyingRow() ? 1 : 0));
+    }
+
+    private void sendBuying(boolean on, int capPercent, long perDay) {
+        if (view != null && Minecraft.getInstance().getConnection() != null) {
+            KingdomWorldNetwork.sendToServer(new OrderPackets.Change(view.kingdomId(), OrderPackets.Change.Action.SET_BUY_FROM_CITIZENS, perDay,
+                    on ? "on" : "off", Order.Kind.MAKE, capPercent, Order.Priority.NORMAL));
+        }
+    }
+
+    private static long nextPerDay(long current, int direction) {
+        int index = -1;
+        for (int i = 0; i < PER_DAY.length; i++) {
+            if (PER_DAY[i] <= current) {
+                index = i;
+            }
+        }
+        if (direction > 0) {
+            return index + 1 < PER_DAY.length ? PER_DAY[index + 1] : PER_DAY[0];
+        }
+        if (index >= 0 && PER_DAY[index] < current) {
+            return PER_DAY[index];
+        }
+        return index - 1 >= 0 ? PER_DAY[index - 1] : PER_DAY[PER_DAY.length - 1];
+    }
+
+    private void initBuying(int x, int y) {
+        OrdersView.Buying buying = view.buying();
+        Button on = screen.add(Button.builder(buyOnLabel(buying.on()), b -> sendBuying(!buying.on(), buying.capPercent(), buying.perDay()))
+                .bounds(x, y, buyOnWidth, ROW - 4).build());
+        on.setTooltip(Tooltip.create(Component.translatable("kingdomworld.orders.buy_from_citizens.hint")));
+        int capX = x + buyOnWidth + GAP;
+        screen.add(new CycleButton(capX, y, buyCapWidth, ROW - 4, buyCapLabel(buying.capPercent()), direction -> {
+            int next = buying.capPercent() + 10 * direction;
+            if (next > 150) {
+                next = 50;
+            } else if (next < 50) {
+                next = 150;
+            }
+            sendBuying(buying.on(), next, buying.perDay());
+        }));
+        int dayX = capX + buyCapWidth + GAP;
+        CycleButton perDay = screen.add(new CycleButton(dayX, y, buyPerDayWidth, ROW - 4, buyPerDayLabel(buying.perDay()),
+                direction -> sendBuying(buying.on(), buying.capPercent(), nextPerDay(buying.perDay(), direction))));
+        perDay.setTooltip(CycleButton.hinted(Component.translatable("kingdomworld.orders.buy_from_citizens.spent", buying.spent())));
+    }
+
     private static Component kindButton(Order.Kind kind) {
         return Component.translatable(KEY + "kind_button." + kind.id());
     }
@@ -162,6 +237,15 @@ final class OrdersTab {
      * The status of an order with what it lacks: "Not enough: raw iron x2 (gathered by: Miner)".
      */
     static Component status(OrdersView.Entry entry) {
+        Component plain = plainStatus(entry);
+        if (entry.bought() > 0) {
+            return Component.translatable(KEY + "status_bought", plain, Component.translatable("kingdomworld.orders.buy_from_citizens.bought",
+                    entry.bought()));
+        }
+        return plain;
+    }
+
+    private static Component plainStatus(OrdersView.Entry entry) {
         MutableComponent text = Component.translatable(ORDER + "status." + entry.status().id());
         if (entry.status() == Order.Status.NO_WORKSHOP && !entry.workshop().isEmpty()) {
             return Component.translatable(KEY + "needs_workshop", inSentence(CitizenTexts.profession(entry.workshop())),
@@ -216,6 +300,12 @@ final class OrdersTab {
         kindWidth = Math.max(screen.buttonWidth(kindButton(Order.Kind.KEEP)), screen.buttonWidth(kindButton(Order.Kind.MAKE)));
         createWidth = Math.max(screen.buttonWidth(Component.translatable(KEY + "create")), screen.buttonWidth(Component.translatable(KEY + "save")));
         backWidth = screen.buttonWidth(Component.translatable(KEY + "back"));
+        buyOnWidth = Math.max(screen.buttonWidth(buyOnLabel(true)), screen.buttonWidth(buyOnLabel(false)));
+        buyCapWidth = screen.buttonWidth(buyCapLabel(150));
+        buyPerDayWidth = screen.buttonWidth(buyPerDayLabel(PER_DAY[PER_DAY.length - 1]));
+        if (view != null) {
+            buyPerDayWidth = Math.max(buyPerDayWidth, screen.buttonWidth(buyPerDayLabel(view.buying().perDay())));
+        }
         arrowWidth = screen.buttonWidth(Component.literal("<"));
         int buttons = priorityWidth + pauseWidth + cancelWidth + 2 * GAP;
         int list = 18 + 90 + 8 + font.width(Component.translatable(KEY + "progress.make", 100_000, 100_000)) + 6 + buttons;
@@ -227,7 +317,8 @@ final class OrdersTab {
         for (String key : List.of("loading", "empty", "catalog_loading", "catalog_empty", "choose")) {
             messages = Math.max(messages, Math.min(300, font.width(Component.translatable(KEY + key))));
         }
-        return Math.max(Math.max(list, top), Math.max(Math.max(controls, searchRow), messages));
+        int buyingRow = buyOnWidth + buyCapWidth + buyPerDayWidth + 2 * GAP;
+        return Math.max(Math.max(Math.max(list, top), buyingRow), Math.max(Math.max(controls, searchRow), messages));
     }
 
     private static int listTop(int top) {
@@ -297,6 +388,9 @@ final class OrdersTab {
                 Button create = screen.add(Button.builder(Component.translatable(KEY + "new"), b -> openCreate())
                         .bounds(x, y, newWidth, ITEM_ROW - 2).build());
                 create.active = view.kingOrders() < view.maxOrders();
+                if (buyingRow()) {
+                    initBuying(x, controlsY(top, panelHeight) + 2);
+                }
             }
             initList(left, top, panelWidth, panelHeight, right);
             return;
@@ -327,7 +421,7 @@ final class OrdersTab {
 
     private void initList(int left, int top, int panelWidth, int panelHeight, int right) {
         List<OrdersView.Entry> orders = view.orders();
-        int rows = visibleRows(top, panelHeight);
+        int rows = listRows(top, panelHeight);
         scroll = Math.max(0, Math.min(scroll, orders.size() - rows));
         if (!view.canManage()) {
             return;
@@ -533,7 +627,7 @@ final class OrdersTab {
             return false;
         }
         if (mode == Mode.LIST && view.canManage()) {
-            int rows = visibleRows(top, panelHeight);
+            int rows = listRows(top, panelHeight);
             int row = (int) Math.floor((mouseY - listTop) / ROW);
             int buttonsX = right - cancelWidth - pauseWidth - priorityWidth - 2 * GAP;
             if (mouseY >= listTop && row >= 0 && row < rows && scroll + row < view.orders().size() && mouseX < buttonsX - 4) {
@@ -560,7 +654,7 @@ final class OrdersTab {
         if (mode != Mode.LIST || view == null) {
             return false;
         }
-        int max = Math.max(0, view.orders().size() - visibleRows(top, panelHeight));
+        int max = Math.max(0, view.orders().size() - listRows(top, panelHeight));
         int next = Math.max(0, Math.min(max, scroll - (int) Math.signum(delta)));
         if (next == scroll) {
             return false;
@@ -589,8 +683,16 @@ final class OrdersTab {
     private void renderList(GuiGraphics graphics, Font font, int left, int top, int panelWidth, int panelHeight, int x, int right, int y) {
         int summaryX = view.canManage() ? x + newWidth + 8 : x;
         List<OrdersView.Entry> orders = view.orders();
-        int rows = visibleRows(top, panelHeight);
+        int rows = listRows(top, panelHeight);
         int summaryRight = right;
+        if (buyingRow() && !view.canManage()) {
+            OrdersView.Buying buying = view.buying();
+            Component line = buying.on() ? Component.translatable("kingdomworld.orders.buy_from_citizens.summary", buyCapLabel(buying.capPercent()),
+                    buyPerDayLabel(buying.perDay())) : buyOnLabel(false);
+            int lineY = controlsY(top, panelHeight) + 6;
+            int drawn = screen.name(graphics, line.getString(), x, lineY, 0xFFB8B8B8, right - x);
+            screen.hoverText(x, lineY, drawn, line);
+        }
         if (orders.size() > rows) {
             Component page = Component.translatable("kingdomworld.screen.throne.page", scroll + 1, Math.min(orders.size(), scroll + rows),
                     orders.size());

@@ -28,8 +28,9 @@ import java.util.UUID;
 
 /**
  * The trading houses of the citizens: once a day of a city each buys of the masters of its city, wholesale and without the sales
- * tax, what they made beyond the days of stock of their local sales, only what citizens made and only at most a share of what it
- * gets abroad, and exports it at once: the money comes from abroad into its till, new money of the currency, within the demand
+ * tax, what they made beyond the days of stock of their local sales, only what citizens made, from masters whose least price (what
+ * the goods cost them and a little more) is within a share of what the house gets abroad, paying the price of the shop but never
+ * more than that share, and exports it at once: the money comes from abroad into its till, new money of the currency, within the demand
  * from abroad of the city. What the trading houses could not take of that demand is asked of the masters whose price passes, as
  * their orders of the next day; a city without a trading house keeps it as the demand a new one would feed.
  */
@@ -71,14 +72,16 @@ public final class Traders {
             boolean holds = false;
             Map<Integer, Double> spare = new HashMap<>();
             for (GoodsCategory category : Workshops.trade(master).goods()) {
-                long average = Math.max(0, master.averageCategory(day, category.ordinal()));
+                // The master keeps what its own city buys of it in its days of stock, or its strength by the share of the kind.
+                long keep = io.github.sekerator.kingdomworld.core.commerce.CityDay.stockTarget(master.averageCategory(day, category.ordinal()),
+                        Shops.strength(server, master, 0, rules), ShopMaking.sharePercent(category, rules.basket()), rules.stockDays());
                 double held = 0;
                 for (Map.Entry<String, Business.Lot> entry : master.goods().entrySet()) {
                     if (entry.getValue().made() && entry.getValue().category() == category.ordinal()) {
                         held += Shops.worth(server, Business.itemOf(entry.getKey())) * entry.getValue().count();
                     }
                 }
-                spare.put(category.ordinal(), Math.max(0.0, held - Money.multiplyCapped(rules.stockDays(), average)));
+                spare.put(category.ordinal(), Math.max(0.0, held - keep));
             }
             List<Map.Entry<String, Business.Lot>> made = new ArrayList<>();
             for (Map.Entry<String, Business.Lot> entry : master.goods().entrySet()) {
@@ -95,8 +98,9 @@ public final class Traders {
                 }
                 double worth = Shops.worth(server, found);
                 long exportMilli = (long) Math.floor(worth * exportPercent * 10.0);
-                long price = ShopMaking.askedMilli(entry.getValue(), master.marginPermille(), Shops.ceilingMilli(server, found));
-                if (price > Money.share(exportMilli, craft.traderBuyPercent(), 100)) {
+                long price = ShopMaking.wholesaleMilli(entry.getValue(), master.marginPermille(), Shops.ceilingMilli(server, found), exportMilli,
+                        craft.traderBuyPercent());
+                if (price < 0) {
                     passes = false;
                     continue;
                 }
@@ -151,8 +155,8 @@ public final class Traders {
             }
             double worth = Shops.worth(server, found);
             long exportMilli = (long) Math.floor(worth * exportPercent * 10.0);
-            long price = ShopMaking.askedMilli(entry.getValue(), master.marginPermille(), Shops.ceilingMilli(server, found));
-            if (price <= Money.share(exportMilli, craft.traderBuyPercent(), 100)) {
+            if (ShopMaking.wholesaleMilli(entry.getValue(), master.marginPermille(), Shops.ceilingMilli(server, found), exportMilli,
+                    craft.traderBuyPercent()) >= 0) {
                 return true;
             }
         }
@@ -175,8 +179,14 @@ public final class Traders {
         for (int i = 0; i < offers.size(); i++) {
             counts[i] = offers.get(i).count();
         }
+        // The houses share what the masters have to spare, each as far as its strength goes.
+        double spare = 0;
+        for (Offer offer : offers) {
+            spare += offer.count() * offer.worth();
+        }
+        double each = Math.max(1.0, Math.min(spare, demand) / traders.size());
         for (Business house : traders) {
-            double room = Shops.strength(server, house, 0, rules);
+            double room = Math.min(Shops.strength(server, house, 0, rules), each);
             CityPurses.PurseKey till = CityPurses.PurseKey.till(kingdom, house.id());
             long income = 0;
             long paidAll = 0;

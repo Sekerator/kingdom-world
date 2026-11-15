@@ -204,6 +204,11 @@ public final class CityGrowth {
      * storehouse when the stores are full, then the roles of the table its level wants and it lacks, those its house of the
      * nobility leans to first, else in the order of the table. Only for these are templates priced.
      */
+    /**
+     * The wish of a head of a city for a house of a merchant or a craftsman, a house that holds a shop; its templates are houses.
+     */
+    public static final String SHOP_HOUSE = "shop_house";
+
     public static List<String> wantedRoles(RulerView view, RulerRules rules, RulerCharacter character) {
         List<String> roles = new ArrayList<>();
         if (view.bedsTotal - view.bedsUsed <= rules.freeBeds() && view.planned(RulerMind.HOUSE) == 0) {
@@ -212,6 +217,11 @@ public final class CityGrowth {
         if (view.storageSlots > 0 && view.storageUsed * 100L >= (long) view.storageSlots * rules.storageFullPercent()
                 && view.planned(RulerMind.WAREHOUSE) == 0) {
             roles.add(RulerMind.WAREHOUSE);
+        }
+        // Townspeople who find too little to buy, no free place for a shop and somebody to keep one: a house of a merchant or a
+        // craftsman, after the house for tenants and the storehouse.
+        if (view.wantsShopHouse && view.planned(RulerMind.HOUSE) == 0 && view.planned(SHOP_HOUSE) == 0) {
+            roles.add(SHOP_HOUSE);
         }
         List<RulerRules.RoleWant> missing = new ArrayList<>();
         for (RulerRules.RoleWant want : rules.roles()) {

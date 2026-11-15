@@ -162,7 +162,9 @@ public final class OrderPackets {
             AMOUNT,
             KIND,
             /** Amount, kind and priority at once, from the form that changes an order. */
-            UPDATE
+            UPDATE,
+            /** Buying of citizens: on with the item "on", the most in percent of the worth in amount, the sum of a day in order. */
+            SET_BUY_FROM_CITIZENS
         }
 
         public Change {

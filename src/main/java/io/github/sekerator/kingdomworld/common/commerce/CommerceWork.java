@@ -73,6 +73,7 @@ public final class CommerceWork {
         CityOf.reset();
         Shops.reset();
         CityGoods.reset();
+        CrownPurchases.reset();
     }
 
     private static String key(UUID kingdom, long city) {

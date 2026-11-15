@@ -24,7 +24,7 @@ import java.util.UUID;
  *              debt, margin, status, poorDays, opened, profitDue, days: [ { day, values: long[] } ] } ],
  *   cities: [ { key, carry: long[], unmet: long[], outside, mastersPass, orders: [ { shop, worth } ], unspent, short, missing, places,
  *               keepers, closed: [ { place, day } ] } ],
- *   surveys: [ { place, day, stations: [ string ] } ],
+ *   surveys: [ { place, day, stations: [ string ] } ], crownDays: [ { kingdom, day, spent, items } ], boughtFor: [ { order, count } ],
  *   counters: [ { kingdom, dimension, x, y, z } ] }
  * </pre>
  *
@@ -92,6 +92,24 @@ public final class CommerceNbt {
             surveys.add(entry);
         });
         tag.put("surveys", surveys);
+        ListTag crownDays = new ListTag();
+        data.crownDays().forEach((kingdom, values) -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putUUID("kingdom", kingdom);
+            entry.putLong("day", values[0]);
+            entry.putLong("spent", values[1]);
+            entry.putLong("items", values[2]);
+            crownDays.add(entry);
+        });
+        tag.put("crownDays", crownDays);
+        ListTag boughtFor = new ListTag();
+        data.boughtFor().forEach((key, count) -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putString("order", key);
+            entry.putLong("count", count);
+            boughtFor.add(entry);
+        });
+        tag.put("boughtFor", boughtFor);
         ListTag counters = new ListTag();
         for (CommerceSavedData.Counter counter : data.counters().values()) {
             CompoundTag entry = new CompoundTag();
@@ -280,6 +298,14 @@ public final class CommerceNbt {
                 stations.add(list.getString(i));
             }
             data.restoreSurvey(entry.getString("place"), new CommerceSavedData.Survey(stations, entry.getLong("day")));
+        }
+        for (CompoundTag entry : compounds(tag, "crownDays")) {
+            if (entry.hasUUID("kingdom")) {
+                data.restoreCrownDay(entry.getUUID("kingdom"), entry.getLong("day"), entry.getLong("spent"), entry.getLong("items"));
+            }
+        }
+        for (CompoundTag entry : compounds(tag, "boughtFor")) {
+            data.restoreBoughtFor(entry.getString("order"), Math.max(0, entry.getLong("count")));
         }
         for (CompoundTag entry : compounds(tag, "counters")) {
             if (!entry.hasUUID("kingdom")) {

@@ -7,6 +7,11 @@ import io.github.sekerator.kingdomworld.common.citizen.CitizenLife;
 import io.github.sekerator.kingdomworld.common.commerce.CityTies;
 import io.github.sekerator.kingdomworld.common.commerce.CommerceSavedData;
 import io.github.sekerator.kingdomworld.common.commerce.CraftSettings;
+import io.github.sekerator.kingdomworld.common.commerce.CrownPurchases;
+import io.github.sekerator.kingdomworld.common.production.Production;
+import io.github.sekerator.kingdomworld.common.storage.KingdomStorage;
+import io.github.sekerator.kingdomworld.core.production.Order;
+import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import io.github.sekerator.kingdomworld.common.commerce.Traders;
 import io.github.sekerator.kingdomworld.common.commerce.ShopActions;
 import io.github.sekerator.kingdomworld.common.construction.BuildingEffects;
@@ -204,6 +209,108 @@ public final class CraftGameTests {
         } finally {
             CraftSettings.override(null);
             CityTies.reset();
+            CitizenGameTests.finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    // ---------------------------------------------------------------- the crown buys of citizens
+
+    /**
+     * A carpenter holding planks its masters made, and a storehouse of the kingdom with room.
+     */
+    private static Business carpenterWithPlanks(GameTestHelper helper, Kingdom kingdom, int planks) {
+        CitizenGameTests.storehouse(helper, 0, 0, 1);
+        Business carpenter = workshop(helper, kingdom, "carpenter", Set.of("crafting_table"));
+        carpenter.addMade("minecraft:oak_planks", GoodsCategory.MATERIALS.ordinal(), planks, 1_000, 50);
+        return carpenter;
+    }
+
+    private static long planksInStore(MinecraftServer server, Kingdom kingdom) {
+        return KingdomStorage.countsById(server, kingdom.id()).getOrDefault("minecraft:oak_planks", 0L);
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_craft_order", timeoutTicks = 200)
+    public static void anOrderNoWorkshopMakesIsBoughtOfAMaster(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        UUID kingId = UUID.randomUUID();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Order", kingId);
+        try {
+            Economy economy = KingdomWorldApi.state(server).economy();
+            long day = TreasuryActions.day(server);
+            economy.adminTreasury(kingdom.id(), 5_000, day);
+            Business carpenter = carpenterWithPlanks(helper, kingdom, 20);
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            Order order = state.order(kingId, kingdom.id(), "minecraft:oak_planks", Order.Kind.MAKE, 8, Order.Priority.NORMAL,
+                    KingdomWorldApi.gameTime(server), Integer.MAX_VALUE, id -> true).order().orElseThrow();
+            Production.plan(server, kingdom.id());
+            helper.assertTrue(order.status() == Order.Status.NO_WORKSHOP, "The order has a workshop after all: " + order.status());
+            long funds = economy.treasury(kingdom.id()).orElseThrow().funds();
+            CrownPurchases.step(server, kingdom.id());
+            helper.assertTrue(planksInStore(server, kingdom) == 8, "The planks are not in the storehouse: " + planksInStore(server, kingdom));
+            helper.assertTrue(order.made() == 8, "The order does not count the planks bought: " + order.made());
+            helper.assertTrue(carpenter.count(Business.key("minecraft:oak_planks", true)) == 12, "The carpenter did not give up eight planks");
+            long paid = funds - economy.treasury(kingdom.id()).orElseThrow().funds();
+            long till = economy.purse(CityPurses.PurseKey.till(kingdom.id(), carpenter.id()));
+            helper.assertTrue(paid > 0 && till == paid, "The till did not get what the crown paid: " + till + " / " + paid);
+            helper.assertTrue(economy.cityTally(kingdom.id(), 0).get(CityStatement.Line.CROWN_BOUGHT) == paid, "The city counts no purchase");
+        } finally {
+            CitizenGameTests.finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_craft_construction", timeoutTicks = 200)
+    public static void aConstructionShortOfPlanksBuysThemOfACarpenter(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Planks", UUID.randomUUID());
+        try {
+            Economy economy = KingdomWorldApi.state(server).economy();
+            long day = TreasuryActions.day(server);
+            economy.adminTreasury(kingdom.id(), 5_000, day);
+            carpenterWithPlanks(helper, kingdom, 40);
+            // An order as a construction gives it for what it lacks: no order of the king, beyond the limit of the king.
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            Order order = state.order(null, kingdom.id(), "minecraft:oak_planks", Order.Kind.MAKE, 24, Order.Priority.NORMAL,
+                    KingdomWorldApi.gameTime(server), Integer.MAX_VALUE, id -> true).order().orElseThrow();
+            Production.plan(server, kingdom.id());
+            CrownPurchases.step(server, kingdom.id());
+            helper.assertTrue(planksInStore(server, kingdom) == 24, "The planks for the construction are not in the storehouse");
+            helper.assertTrue(order.made() == 24, "The order of the construction does not count them");
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.commerce.CommerceSavedData.get(server).boughtFor(kingdom.id(), order.id()) == 24,
+                    "The order does not tell what was bought of citizens");
+        } finally {
+            CitizenGameTests.finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_craft_reserve", timeoutTicks = 200)
+    public static void purchasesNeverTakeTheTreasuryBelowItsDaysOfWages(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Reserve", UUID.randomUUID());
+        try {
+            Economy economy = KingdomWorldApi.state(server).economy();
+            long day = TreasuryActions.day(server);
+            economy.adminTreasury(kingdom.id(), 600, day);
+            // Ten farmers paid a day: the treasury keeps seven days of their wages.
+            List<Economy.WageClaim> claims = new java.util.ArrayList<>();
+            for (int i = 0; i < 10; i++) {
+                claims.add(new Economy.WageClaim(UUID.randomUUID(), "farmer"));
+            }
+            economy.payday(kingdom.id(), day, List.of(), claims, io.github.sekerator.kingdomworld.common.economy.EconomySettings.rules());
+            long keep = CraftSettings.rules().crownBuyKeepWageDays() * economy.treasury(kingdom.id()).orElseThrow().lastPayroll().due();
+            helper.assertTrue(keep > 0, "No wages to keep");
+            carpenterWithPlanks(helper, kingdom, 500);
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            state.order(null, kingdom.id(), "minecraft:oak_planks", Order.Kind.MAKE, 500, Order.Priority.NORMAL, KingdomWorldApi.gameTime(server),
+                    Integer.MAX_VALUE, id -> true);
+            Production.plan(server, kingdom.id());
+            CrownPurchases.step(server, kingdom.id());
+            long funds = economy.treasury(kingdom.id()).orElseThrow().funds();
+            helper.assertTrue(funds >= keep, "The purchases took the treasury below its days of wages: " + funds + " < " + keep);
+            helper.assertTrue(planksInStore(server, kingdom) < 500, "The crown bought everything it could not pay for");
+        } finally {
             CitizenGameTests.finish(helper, kingdom);
         }
         helper.succeed();

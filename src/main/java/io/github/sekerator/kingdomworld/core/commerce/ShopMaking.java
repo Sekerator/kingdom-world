@@ -518,12 +518,40 @@ public final class ShopMaking {
      * the margin, never above the ceiling and never below what they cost and a little more; goods bought as before.
      */
     public static long askedMilli(Business.Lot lot, int marginPermille, long ceilingMilli) {
+        return askedMilli(lot, marginPermille, ceilingMilli, 0);
+    }
+
+    /**
+     * The price a shop asks for goods without the tax, in thousandths; goods its masters made it sells to the townspeople and
+     * players no cheaper than their worth, as the market of the city values them, while they cost it less.
+     *
+     * @param worthMilli the worth of one, in thousandths; 0 to leave it out
+     */
+    public static long askedMilli(Business.Lot lot, int marginPermille, long ceilingMilli, long worthMilli) {
         if (!lot.made()) {
             return ShopPricing.askedMilli(lot.costMilli(), marginPermille, ceilingMilli);
         }
         long base = lot.baseMilli();
         long least = ShopPricing.priceMilli(base, ShopPricing.LEAST_MARGIN);
-        return Math.max(least, Math.min(ShopPricing.priceMilli(base, marginPermille), ceilingMilli));
+        long asked = Math.max(ShopPricing.priceMilli(base, marginPermille), Math.max(0, worthMilli));
+        return Math.max(least, Math.min(asked, ceilingMilli));
+    }
+
+    /**
+     * What a trading house pays a master for goods made by citizens, wholesale, in thousandths: the least the master sells for,
+     * what they cost it and a little more, for goods beyond what its own city buys of it, which it would not sell otherwise; below
+     * 0 when that is above the share of what the house gets abroad it may pay, and the house does not buy.
+     *
+     * @param exportMilli what one brings abroad, in thousandths
+     * @param buyPercent  the most a trading house pays, in percent of that
+     */
+    public static long wholesaleMilli(Business.Lot lot, int marginPermille, long ceilingMilli, long exportMilli, int buyPercent) {
+        long most = Money.share(Math.max(0, exportMilli), Math.max(0, buyPercent), 100);
+        long least = ShopPricing.priceMilli(lot.baseMilli(), ShopPricing.LEAST_MARGIN);
+        if (!lot.made() || least > most) {
+            return -1;
+        }
+        return least;
     }
 
     /**

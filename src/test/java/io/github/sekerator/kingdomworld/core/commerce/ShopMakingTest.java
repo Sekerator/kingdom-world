@@ -158,6 +158,21 @@ class ShopMakingTest {
     }
 
     @Test
+    void aTradingHouseBuysWholesaleWithinItsShareOfTheExportAndOnlyWhatCitizensMade() {
+        // Goods worth 3 export at 70 percent: 2.1, of which the house pays at most 80 percent, 1.68.
+        long export = 2_100;
+        Business.Lot cheap = new Business.Lot(GoodsCategory.FOOD.ordinal(), 5, 1_364, 116, true);
+        // What it would not sell in its city it sells wholesale for what it cost and a little more, whatever its own price.
+        assertEquals((1_480L * 1_050) / 1_000, ShopMaking.wholesaleMilli(cheap, 300, 4_500, export, 80));
+        assertEquals((1_480L * 1_050) / 1_000, ShopMaking.wholesaleMilli(cheap, 50, 4_500, export, 80));
+        // Raw materials at their worth: the master cannot sell for the share, and the house buys nothing.
+        Business.Lot dear = new Business.Lot(GoodsCategory.FOOD.ordinal(), 5, 2_727, 116, true);
+        assertEquals(-1, ShopMaking.wholesaleMilli(dear, 50, 4_500, export, 80));
+        assertEquals(-1, ShopMaking.wholesaleMilli(new Business.Lot(GoodsCategory.FOOD.ordinal(), 5, 1_000), 50, 4_500, export, 80),
+                "goods bought of the crown are never exported");
+    }
+
+    @Test
     void theTargetCountsWhatTheTradingHouseAskedOfIt() {
         assertEquals(30 + 40, ShopMaking.target(10, 150.0, 35, 3, 40));
         assertEquals(52 + 40, ShopMaking.target(-1, 150.0, 35, 3, 40), "a new trade stocks its strength by the share of the kind");

@@ -20,11 +20,23 @@ import java.util.UUID;
  * @param maxOrders  orders of the king the kingdom may have
  * @param kingOrders orders of the king the limit counts: those of the constructions for what they lack do not
  */
-public record OrdersView(UUID kingdomId, boolean canManage, int maxOrders, List<Entry> orders, int kingOrders) {
+public record OrdersView(UUID kingdomId, boolean canManage, int maxOrders, List<Entry> orders, int kingOrders, Buying buying) {
     public static final int MAX_ENTRIES = 256;
     public static final int MAX_MISSING = 8;
     /** Deepest a sub-order is shown. */
     public static final int MAX_DEPTH = 16;
+
+    /**
+     * What the kingdom set for buying of its citizens what its workshops cannot make.
+     *
+     * @param active     whether its cities keep money of their own, so that its citizens make goods
+     * @param capPercent the most it pays, in percent of the worth
+     * @param perDay     the most it spends a day
+     * @param spent      what it spent on goods of citizens today
+     */
+    public record Buying(boolean active, boolean on, int capPercent, long perDay, long spent) {
+        public static final Buying NONE = new Buying(false, false, 150, 0, 0);
+    }
 
     /**
      * Something missing for an order.
@@ -44,9 +56,15 @@ public record OrdersView(UUID kingdomId, boolean canManage, int maxOrders, List<
      * @param depth    0 for an order of the king, 1 for its sub-orders and so on
      * @param progress items made so far for a make order, items in stock for a keep order
      * @param workshop for an order without workshop: the profession and the workstation it needs, else empty
+     * @param bought   items the crown bought of citizens for it
      */
     public record Entry(long id, int depth, ItemStack sample, Order.Kind kind, int amount, long progress, Order.Priority priority,
-                        boolean paused, Order.Status status, List<Missing> missing, String workshop, String workshopStation) {
+                        boolean paused, Order.Status status, List<Missing> missing, String workshop, String workshopStation, long bought) {
+        public Entry(long id, int depth, ItemStack sample, Order.Kind kind, int amount, long progress, Order.Priority priority, boolean paused,
+                     Order.Status status, List<Missing> missing, String workshop, String workshopStation) {
+            this(id, depth, sample, kind, amount, progress, priority, paused, status, missing, workshop, workshopStation, 0);
+        }
+
         public Entry {
             Objects.requireNonNull(sample, "sample");
             Objects.requireNonNull(kind, "kind");
@@ -69,8 +87,13 @@ public record OrdersView(UUID kingdomId, boolean canManage, int maxOrders, List<
         this(kingdomId, canManage, maxOrders, orders, (int) orders.stream().filter(entry -> !entry.isSubOrder()).count());
     }
 
+    public OrdersView(UUID kingdomId, boolean canManage, int maxOrders, List<Entry> orders, int kingOrders) {
+        this(kingdomId, canManage, maxOrders, orders, kingOrders, Buying.NONE);
+    }
+
     public OrdersView {
         Objects.requireNonNull(kingdomId, "kingdomId");
+        buying = buying == null ? Buying.NONE : buying;
         orders = List.copyOf(orders);
         if (orders.size() > MAX_ENTRIES) {
             throw new IllegalArgumentException("Orders view too large");
@@ -114,7 +137,13 @@ public record OrdersView(UUID kingdomId, boolean canManage, int maxOrders, List<
             }
             buf.writeUtf(entry.workshop(), Profession.MAX_ID_LENGTH);
             buf.writeUtf(entry.workshopStation(), Profession.MAX_ID_LENGTH);
+            buf.writeVarLong(entry.bought());
         }
+        buf.writeBoolean(buying.active());
+        buf.writeBoolean(buying.on());
+        buf.writeVarInt(buying.capPercent());
+        buf.writeVarLong(buying.perDay());
+        buf.writeVarLong(buying.spent());
     }
 
     public static OrdersView decode(FriendlyByteBuf buf) {
@@ -143,9 +172,11 @@ public record OrdersView(UUID kingdomId, boolean canManage, int maxOrders, List<
                 missing.add(new Missing(buf.readItem(), buf.readVarInt(), buf.readUtf(Profession.MAX_ID_LENGTH)));
             }
             orders.add(new Entry(id, depth, sample, kind, amount, progress, priority, paused, status, missing,
-                    buf.readUtf(Profession.MAX_ID_LENGTH), buf.readUtf(Profession.MAX_ID_LENGTH)));
+                    buf.readUtf(Profession.MAX_ID_LENGTH), buf.readUtf(Profession.MAX_ID_LENGTH), Math.max(0, buf.readVarLong())));
         }
-        return new OrdersView(kingdomId, canManage, maxOrders, orders, kingOrders);
+        Buying buying = new Buying(buf.readBoolean(), buf.readBoolean(), buf.readVarInt(), Math.max(0, buf.readVarLong()),
+                Math.max(0, buf.readVarLong()));
+        return new OrdersView(kingdomId, canManage, maxOrders, orders, kingOrders, buying);
     }
 
     /**

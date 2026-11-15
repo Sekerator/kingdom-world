@@ -217,7 +217,7 @@ public final class StallActions {
         return Prices.autoSellPrice(MarketStock.worth(server, item).amount(), MarketStock.stock(server, kingdom, item), TradeSettings.rules());
     }
 
-    static long buyPrice(MinecraftServer server, UUID kingdom, Market.BuyEntry entry, Item item) {
+    public static long buyPrice(MinecraftServer server, UUID kingdom, Market.BuyEntry entry, Item item) {
         if (entry.price() > 0) {
             return entry.price();
         }
@@ -227,7 +227,7 @@ public final class StallActions {
     /**
      * Items the kingdom takes now: up to its target stock and within what is left of today's budget (0 for no limit).
      */
-    static long wantedNow(MinecraftServer server, UUID kingdom, Market market, Market.BuyEntry entry, Item item, long price, long day) {
+    public static long wantedNow(MinecraftServer server, UUID kingdom, Market market, Market.BuyEntry entry, Item item, long price, long day) {
         if (price < 1) {
             return 0;
         }

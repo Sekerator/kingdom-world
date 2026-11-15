@@ -133,6 +133,7 @@ public final class MarketActions {
             }
         }
         Market.DayStats stats = market.stats(day);
+        long[] crownDay = io.github.sekerator.kingdomworld.common.commerce.CommerceSavedData.get(server).crownDay(kingdomId, day);
         int volume = 0;
         List<io.github.sekerator.kingdomworld.core.citizen.Citizen> merchants = MerchantBehavior.working(server, kingdomId);
         for (io.github.sekerator.kingdomworld.core.citizen.Citizen merchant : merchants) {
@@ -147,7 +148,8 @@ public final class MarketActions {
                 io.github.sekerator.kingdomworld.common.commerce.CityOf.active(server, kingdomId), market.sellToCitizens(),
                 treasury.get().journal().totals(day, io.github.sekerator.kingdomworld.core.economy.TreasuryJournal.Period.TODAY)
                         .getOrDefault(io.github.sekerator.kingdomworld.core.economy.LedgerCategory.COMMERCE,
-                                io.github.sekerator.kingdomworld.core.economy.TreasuryJournal.Totals.ZERO).income()));
+                                io.github.sekerator.kingdomworld.core.economy.TreasuryJournal.Totals.ZERO).income(),
+                citizenRows(server, kingdomId), crownDay[0], crownDay[1]));
     }
 
     // ---------------------------------------------------------------- changes
@@ -167,6 +169,24 @@ public final class MarketActions {
     }
 
     /**
+     * Goods citizens made that are cheaper than imports, for the view of imports; none while the money of the cities is off.
+     */
+    private static List<TradeViews.CitizenRow> citizenRows(MinecraftServer server, UUID kingdom) {
+        List<TradeViews.CitizenRow> rows = new ArrayList<>();
+        if (!io.github.sekerator.kingdomworld.common.commerce.CityOf.active(server, kingdom)) {
+            return rows;
+        }
+        for (io.github.sekerator.kingdomworld.common.commerce.CrownPurchases.Cheaper cheaper
+                : io.github.sekerator.kingdomworld.common.commerce.CrownPurchases.cheaper(server, kingdom, TradeViews.MAX_ROWS)) {
+            Item item = GoodsStacks.item(cheaper.item());
+            if (item != null) {
+                rows.add(new TradeViews.CitizenRow(new ItemStack(item), cheaper.count(), cheaper.price(), cheaper.importCost()));
+            }
+        }
+        return rows;
+    }
+
+    /**
      * Applies a decision about the market of a kingdom.
      *
      * @param actor the player, who needs the right to manage the market; {@code null} for an operator
@@ -175,7 +195,7 @@ public final class MarketActions {
         TradeRules rules = TradeSettings.rules();
         Item item = GoodsStacks.item(change.item());
         boolean needsItem = switch (change.action()) {
-            case PUT_SELL, PUT_BUY, PUT_EXPORT, ORDER_IMPORT -> true;
+            case PUT_SELL, PUT_BUY, PUT_EXPORT, ORDER_IMPORT, BUY_FROM_CITIZENS -> true;
             default -> false;
         };
         if (needsItem && (item == null || GoodsStacks.untradeable(new ItemStack(item)))) {
@@ -215,6 +235,10 @@ public final class MarketActions {
                 }
                 case ORDER_IMPORT -> {
                     return orderImport(server, actor, kingdom, item, first);
+                }
+                case BUY_FROM_CITIZENS -> {
+                    return io.github.sekerator.kingdomworld.common.commerce.CrownPurchases.buyNow(server, actor, kingdom, change.item(),
+                            Math.max(1, first));
                 }
                 case SET_OPEN -> {
                     outcome = KingdomWorldApi.change(server, "open a market", state -> state.setOpenToOutsiders(actor, kingdom, change.first() != 0, rules));

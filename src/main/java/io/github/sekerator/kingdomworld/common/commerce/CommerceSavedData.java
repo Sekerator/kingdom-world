@@ -259,6 +259,75 @@ public final class CommerceSavedData extends SavedData {
         return sum;
     }
 
+    // ---------------------------------------------------------------- what the crown bought of citizens
+
+    /** What the crown spent on goods of citizens on a day and how many items it got, by kingdom: { day, spent, items }. */
+    private final Map<UUID, long[]> crownDays = new LinkedHashMap<>();
+    /** How many items the crown bought of citizens for each order, by kingdom and order. */
+    private final Map<String, Long> boughtFor = new LinkedHashMap<>();
+
+    /**
+     * What the crown spent on goods of citizens on a day, and how many items it got: { spent, items }.
+     */
+    public long[] crownDay(UUID kingdom, long day) {
+        long[] known = crownDays.get(kingdom);
+        return known == null || known[0] != day ? new long[2] : new long[]{known[1], known[2]};
+    }
+
+    public void addCrownDay(UUID kingdom, long day, long spent, long items) {
+        long[] known = crownDays.get(kingdom);
+        if (known == null || known[0] != day) {
+            known = new long[]{day, 0, 0};
+            crownDays.put(kingdom, known);
+        }
+        known[1] = io.github.sekerator.kingdomworld.core.economy.Money.addCapped(known[1], Math.max(0, spent));
+        known[2] += Math.max(0, items);
+        setDirty();
+    }
+
+    Map<UUID, long[]> crownDays() {
+        return crownDays;
+    }
+
+    void restoreCrownDay(UUID kingdom, long day, long spent, long items) {
+        crownDays.put(kingdom, new long[]{day, Math.max(0, spent), Math.max(0, items)});
+    }
+
+    private static String orderKey(UUID kingdom, long order) {
+        return kingdom + "/" + order;
+    }
+
+    /**
+     * How many items the crown bought of citizens for an order.
+     */
+    public long boughtFor(UUID kingdom, long order) {
+        return boughtFor.getOrDefault(orderKey(kingdom, order), 0L);
+    }
+
+    public void addBoughtFor(UUID kingdom, long order, long count) {
+        if (order > 0 && count > 0) {
+            boughtFor.merge(orderKey(kingdom, order), count, Long::sum);
+            setDirty();
+        }
+    }
+
+    /**
+     * Forgets what was bought for orders a kingdom no longer has.
+     */
+    public void keepOrders(UUID kingdom, java.util.Set<Long> orders) {
+        if (boughtFor.keySet().removeIf(key -> key.startsWith(kingdom + "/") && !orders.contains(Long.parseLong(key.substring(key.indexOf('/') + 1))))) {
+            setDirty();
+        }
+    }
+
+    Map<String, Long> boughtFor() {
+        return boughtFor;
+    }
+
+    void restoreBoughtFor(String key, long count) {
+        boughtFor.put(key, count);
+    }
+
     // ---------------------------------------------------------------- counters
 
     public Map<String, Counter> counters() {

@@ -224,7 +224,7 @@ public final class ShopActions {
      * reputation of the player makes it, never below what they cost the shop with the work in them.
      */
     static long playerTotal(MinecraftServer server, Business shop, UUID player, Business.Lot lot, Item item, long count) {
-        long asked = ShopMaking.askedMilli(lot, shop.marginPermille(), Shops.ceilingMilli(server, item));
+        long asked = ShopMaking.askedMilli(lot, shop.marginPermille(), Shops.ceilingMilli(server, item), Shops.worthMilli(server, item));
         long total = ShopPricing.total(asked, count);
         long reputation = LawWork.priceFor(server, shop.kingdomId(), player, total);
         return Math.max(ShopPricing.total(lot.baseMilli(), count), reputation);

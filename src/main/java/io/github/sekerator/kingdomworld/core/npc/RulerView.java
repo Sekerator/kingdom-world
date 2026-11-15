@@ -106,6 +106,8 @@ public final class RulerView {
 
     public int storageSlots;
     public int storageUsed;
+    /** Whether the townspeople of the city want a house of a merchant or a craftsman for a shop, for its head. */
+    public boolean wantsShopHouse;
     public Map<String, Good> goods = new LinkedHashMap<>();
 
     public long balance;

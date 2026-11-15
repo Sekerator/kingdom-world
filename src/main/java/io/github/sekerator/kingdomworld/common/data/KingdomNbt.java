@@ -245,6 +245,7 @@ public final class KingdomNbt {
             state.citizens().restore(kingdom.id(), population.sites(), population.posts(), population.citizens(),
                     population.lastArrival(), population.chronicle(), population.production());
             state.orders().restore(kingdom.id(), orders.orders(), orders.next());
+            state.orders().restoreBuying(kingdom.id(), orders.buying());
             state.economy().restore(treasury);
         } catch (IllegalArgumentException e) {
             // All or nothing: a kingdom whose people or money cannot be restored is not restored either.

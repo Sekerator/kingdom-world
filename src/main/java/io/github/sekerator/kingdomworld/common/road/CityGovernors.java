@@ -962,8 +962,10 @@ public final class CityGovernors {
         ToLongFunction<String> worth = MaterialWorth.worth(server);
         int percent = RoadSettings.governorStockPercent();
         BlockPos hall = CityPlots.middle(server, kingdomId, cityId).orElse(BlockPos.ZERO);
+        view.wantsShopHouse = io.github.sekerator.kingdomworld.common.commerce.CityShopHouses.wanted(server, kingdomId, cityId);
         for (String role : CityGrowth.wantedRoles(view, rules, character)) {
-            List<BuildingTemplate> candidates = new ArrayList<>(RulerPlaces.templates(role, style));
+            List<BuildingTemplate> candidates = new ArrayList<>(CityGrowth.SHOP_HOUSE.equals(role)
+                    ? io.github.sekerator.kingdomworld.common.commerce.CityShopHouses.templates(style) : RulerPlaces.templates(role, style));
             candidates.removeIf(template -> charter.refuses(template.id().toString(), day));
             if (candidates.isEmpty()) {
                 continue;

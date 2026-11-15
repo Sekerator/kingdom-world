@@ -158,6 +158,20 @@ public final class GovernorFunds {
         CityEconomyRules cityRules = io.github.sekerator.kingdomworld.common.commerce.CityEconomySettings.rules();
         long today = TreasuryActions.day(server);
         long spent = 0;
+        if (fromCity) {
+            // The shops and workshops of the city first, without the sales tax: what citizens made, or bought goods cheaper than the
+            // crown sells them; what is left comes from abroad.
+            for (Map.Entry<String, Integer> entry : lacking.entrySet()) {
+                if (spent >= budget) {
+                    break;
+                }
+                long[] bought = io.github.sekerator.kingdomworld.common.commerce.CrownPurchases.cityBuys(server, kingdomId, cityId, entry.getKey(),
+                        entry.getValue(), budget - spent, today);
+                spent += bought[1];
+                entry.setValue((int) Math.max(0, entry.getValue() - bought[0]));
+            }
+            lacking.values().removeIf(count -> count <= 0);
+        }
         for (Map.Entry<String, Integer> entry : lacking.entrySet()) {
             if (left <= 0 || spent >= budget) {
                 break;

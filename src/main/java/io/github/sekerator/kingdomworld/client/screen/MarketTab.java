@@ -75,6 +75,7 @@ final class MarketTab {
     private int chooseWidth;
     private int cancelWidth;
     private int setWidth;
+    private int citizensWidth;
     private int toggleWidth;
 
     MarketTab(ThroneScreen screen) {
@@ -152,9 +153,14 @@ final class MarketTab {
         return switch (mode) {
             case EXPORT -> List.of(Component.translatable(KEY + "export_day", day.merchants(), TradeTexts.items(day.exported()),
                     day.exportVolume(), money(day.exportIncome()), money(day.exportMaxIncome())));
-            case IMPORT -> List.of(Component.translatable(KEY + "import_day", TradeTexts.items(day.imported()), day.importMax(),
-                    money(day.importCost())));
-            default -> List.of(Component.translatable(KEY + "day", money(day.sold()), money(day.bought()), money(day.lotTax())));
+            case IMPORT -> List.of(view.boughtFromCitizens() > 0
+                    ? Component.translatable(KEY + "import_day_citizens", TradeTexts.items(day.imported()), day.importMax(), money(day.importCost()),
+                    TradeTexts.items(view.boughtItems()), money(view.boughtFromCitizens()))
+                    : Component.translatable(KEY + "import_day", TradeTexts.items(day.imported()), day.importMax(), money(day.importCost())));
+            default -> List.of(view.boughtFromCitizens() > 0
+                    ? Component.translatable(KEY + "day_citizens", money(day.sold()), money(day.bought()), money(day.lotTax()),
+                    money(view.boughtFromCitizens()))
+                    : Component.translatable(KEY + "day", money(day.sold()), money(day.bought()), money(day.lotTax())));
         };
     }
 
@@ -170,6 +176,7 @@ final class MarketTab {
         chooseWidth = screen.buttonWidth(Component.translatable(KEY + "choose"));
         cancelWidth = screen.buttonWidth(Component.translatable(KEY + "cancel"));
         setWidth = screen.buttonWidth(Component.translatable(KEY + "set"));
+        citizensWidth = screen.buttonWidth(Component.translatable("kingdomworld.market.import.citizens_buy"));
         toggleWidth = 0;
         for (String key : List.of("open.on", "open.off", "foreign.on", "foreign.off", "citizens.on", "citizens.off")) {
             toggleWidth = Math.max(toggleWidth, screen.buttonWidth(Component.translatable(KEY + key)));
@@ -217,9 +224,20 @@ final class MarketTab {
             case BUY -> view.buys().size();
             case LOTS -> view.lots().size();
             case EXPORT -> view.exports().size();
-            case IMPORT -> view.imports().size();
+            case IMPORT -> view.imports().size() + view.citizens().size();
             case SETTINGS -> 0;
         };
+    }
+
+    /**
+     * Whether a row of the list is goods citizens sell cheaper than the import, which a manager buys of them.
+     */
+    private boolean citizenRow(int index) {
+        return mode == Mode.IMPORT && view != null && index >= view.imports().size();
+    }
+
+    private TradeViews.CitizenRow citizen(int index) {
+        return view.citizens().get(index - view.imports().size());
     }
 
     private int visibleRows(int top, int panelHeight) {
@@ -262,11 +280,22 @@ final class MarketTab {
         }
         int rows = visibleRows(top, panelHeight);
         scroll = Math.max(0, Math.min(scroll, rowCount() - rows));
-        if (!view.canManage() || mode == Mode.LOTS || mode == Mode.IMPORT) {
+        if (!view.canManage() || mode == Mode.LOTS) {
             return;
         }
         for (int i = 0; i < rows && scroll + i < rowCount(); i++) {
             String item = itemId(rowStack(scroll + i));
+            if (mode == Mode.IMPORT) {
+                if (citizenRow(scroll + i)) {
+                    TradeViews.CitizenRow row = citizen(scroll + i);
+                    Button buy = screen.add(Button.builder(Component.translatable("kingdomworld.market.import.citizens_buy"),
+                            b -> send(TradePackets.MarketChange.Action.BUY_FROM_CITIZENS, item, 0, Math.max(1, row.count()), 0))
+                            .bounds(right - citizensWidth, listTop(top) + i * ROW, citizensWidth, ROW - 2).build());
+                    buy.setTooltip(Tooltip.create(Component.translatable("kingdomworld.market.import.citizens_hint", money(row.price()),
+                            money(row.importCost()))));
+                }
+                continue;
+            }
             TradePackets.MarketChange.Action remove = switch (mode) {
                 case SELL -> TradePackets.MarketChange.Action.REMOVE_SELL;
                 case BUY -> TradePackets.MarketChange.Action.REMOVE_BUY;
@@ -283,7 +312,7 @@ final class MarketTab {
             case BUY -> view.buys().get(index).sample();
             case LOTS -> view.lots().get(index).stack();
             case EXPORT -> view.exports().get(index).sample();
-            case IMPORT -> view.imports().get(index).sample();
+            case IMPORT -> citizenRow(index) ? citizen(index).sample() : view.imports().get(index).sample();
             case SETTINGS -> ItemStack.EMPTY;
         };
     }
@@ -476,11 +505,11 @@ final class MarketTab {
         }
         int listTop = listTop(top);
         boolean buttons = view.canManage() && mode != Mode.LOTS && mode != Mode.IMPORT;
-        int textRight = buttons ? right - removeWidth - 4 : right;
-        int nameWidth = Math.min(110, (textRight - x - 20) / 2);
+        int nameWidth = Math.min(110, ((buttons ? right - removeWidth - 4 : right) - x - 20) / 2);
         for (int i = 0; i < rows && scroll + i < count; i++) {
             int index = scroll + i;
             int rowY = listTop + i * ROW;
+            int textRight = buttons ? right - removeWidth - 4 : view.canManage() && citizenRow(index) ? right - citizensWidth - 4 : right;
             ItemStack stack = rowStack(index);
             graphics.renderItem(stack, x, rowY);
             if (mode == Mode.LOTS) {
@@ -488,7 +517,9 @@ final class MarketTab {
             }
             screen.name(graphics, stack.getHoverName().getString(), x + 20, rowY + 4, 0xFFFFFFFF, nameWidth - 4);
             int detailX = x + 20 + nameWidth;
-            screen.name(graphics, detail(index).getString(), detailX, rowY + 4, 0xFFD0D0D0, textRight - detailX);
+            Component detail = detail(index);
+            int drawn = screen.name(graphics, detail.getString(), detailX, rowY + 4, citizenRow(index) ? 0xFFA0E0A0 : 0xFFD0D0D0, textRight - detailX);
+            screen.hoverText(detailX, rowY + 4, drawn, detail);
         }
         if (count > rows) {
             Component page = Component.translatable("kingdomworld.screen.throne.page", scroll + 1, Math.min(count, scroll + rows), count);
@@ -517,6 +548,10 @@ final class MarketTab {
                 yield Component.translatable(KEY + "row.export", row.above(), TradeTexts.items(row.stock()), money(row.income() / 10));
             }
             case IMPORT -> {
+                if (citizenRow(index)) {
+                    TradeViews.CitizenRow row = citizen(index);
+                    yield Component.translatable("kingdomworld.market.import.citizens_cheaper", TradeTexts.items(row.count()), money(row.price()));
+                }
                 TradeViews.ImportRow row = view.imports().get(index);
                 Component when = row.ticksLeft() > 0 ? Component.translatable(KEY + "arrives", TradeTexts.ticks(row.ticksLeft()))
                         : Component.translatable(KEY + "waits_room");

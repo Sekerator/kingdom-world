@@ -11,10 +11,12 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * NBT form of the orders of one kingdom (format 5), stored inside the kingdom's compound.
+ * NBT form of the orders of one kingdom (format 5), stored inside the kingdom's compound, with what the kingdom set for buying of
+ * its citizens, optional, absent in older worlds.
  *
  * <pre>
- * orders: { next, list: [ { id, item, kind, amount, made, priority, paused, parent, created } ] }
+ * orders: { next, list: [ { id, item, kind, amount, made, priority, paused, parent, created } ],
+ *           buyFromCitizens?, buyCapPercent?, buyPerDay? }
  * </pre>
  *
  * <p>Reading is strict like {@link KingdomNbt}: what cannot be understood throws {@link IllegalArgumentException}.
@@ -36,11 +38,21 @@ public final class OrderNbt {
     /** Longest item id an order keeps. */
     private static final int MAX_ITEM_LENGTH = 256;
 
+    private static final String BUY = "buyFromCitizens";
+    private static final String BUY_CAP = "buyCapPercent";
+    private static final String BUY_PER_DAY = "buyPerDay";
+
     /**
      * The orders of a kingdom as read, not yet restored.
+     *
+     * @param buying what it set for buying of its citizens, {@code null} for nothing
      */
-    public record Orders(List<Order> orders, long next) {
-        public static final Orders EMPTY = new Orders(List.of(), 1);
+    public record Orders(List<Order> orders, long next, OrderBook.Buying buying) {
+        public static final Orders EMPTY = new Orders(List.of(), 1, null);
+
+        public Orders(List<Order> orders, long next) {
+            this(orders, next, null);
+        }
     }
 
     private OrderNbt() {
@@ -64,6 +76,11 @@ public final class OrderNbt {
             list.add(entry);
         }
         tag.put(LIST, list);
+        book.buying(kingdomId).ifPresent(buying -> {
+            tag.putBoolean(BUY, buying.on());
+            tag.putInt(BUY_CAP, buying.capPercent());
+            tag.putLong(BUY_PER_DAY, buying.perDay());
+        });
         return tag;
     }
 
@@ -91,7 +108,9 @@ public final class OrderNbt {
         for (int i = 0; i < list.size(); i++) {
             orders.add(readOrder(list.getCompound(i), name));
         }
-        return new Orders(orders, Math.max(1, tag.getLong(NEXT)));
+        OrderBook.Buying buying = tag.contains(BUY) ? new OrderBook.Buying(tag.getBoolean(BUY), tag.getInt(BUY_CAP),
+                Math.max(0, tag.getLong(BUY_PER_DAY))) : null;
+        return new Orders(orders, Math.max(1, tag.getLong(NEXT)), buying);
     }
 
     private static Order readOrder(CompoundTag tag, String name) {

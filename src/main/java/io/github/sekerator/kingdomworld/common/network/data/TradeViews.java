@@ -248,6 +248,16 @@ public final class TradeViews {
     }
 
     /**
+     * Goods citizens made that are cheaper than bringing them from abroad.
+     *
+     * @param count      how many of them cost no more than the import
+     * @param price      the cheapest of one
+     * @param importCost what one costs from abroad
+     */
+    public record CitizenRow(ItemStack sample, long count, long price, long importCost) {
+    }
+
+    /**
      * The counters of the market today.
      *
      * @param merchants     healthy merchants at posts with a stall
@@ -263,13 +273,23 @@ public final class TradeViews {
     public record MarketView(UUID kingdomId, boolean canManage, Currency own, List<SellRow> sells, List<BuyRow> buys, List<LotRow> lots,
                              List<ExportRow> exports, List<ImportRow> imports, boolean openToOutsiders, boolean foreignCurrency,
                              int salesTaxPermille, int maxSalesTaxPermille, int feePermille, int maxFeePermille, Day day,
-                             List<String> importable, int maxEntries, boolean citizenShops, boolean sellToCitizens, long soldToCitizens) {
+                             List<String> importable, int maxEntries, boolean citizenShops, boolean sellToCitizens, long soldToCitizens,
+                             List<CitizenRow> citizens, long boughtFromCitizens, long boughtItems) {
         public MarketView(UUID kingdomId, boolean canManage, Currency own, List<SellRow> sells, List<BuyRow> buys, List<LotRow> lots,
                           List<ExportRow> exports, List<ImportRow> imports, boolean openToOutsiders, boolean foreignCurrency,
                           int salesTaxPermille, int maxSalesTaxPermille, int feePermille, int maxFeePermille, Day day,
                           List<String> importable, int maxEntries) {
             this(kingdomId, canManage, own, sells, buys, lots, exports, imports, openToOutsiders, foreignCurrency, salesTaxPermille,
-                    maxSalesTaxPermille, feePermille, maxFeePermille, day, importable, maxEntries, false, true, 0);
+                    maxSalesTaxPermille, feePermille, maxFeePermille, day, importable, maxEntries, false, true, 0, List.of(), 0, 0);
+        }
+
+        public MarketView(UUID kingdomId, boolean canManage, Currency own, List<SellRow> sells, List<BuyRow> buys, List<LotRow> lots,
+                          List<ExportRow> exports, List<ImportRow> imports, boolean openToOutsiders, boolean foreignCurrency,
+                          int salesTaxPermille, int maxSalesTaxPermille, int feePermille, int maxFeePermille, Day day,
+                          List<String> importable, int maxEntries, boolean citizenShops, boolean sellToCitizens, long soldToCitizens) {
+            this(kingdomId, canManage, own, sells, buys, lots, exports, imports, openToOutsiders, foreignCurrency, salesTaxPermille,
+                    maxSalesTaxPermille, feePermille, maxFeePermille, day, importable, maxEntries, citizenShops, sellToCitizens, soldToCitizens,
+                    List.of(), 0, 0);
         }
 
         public MarketView {
@@ -281,6 +301,7 @@ public final class TradeViews {
             lots = bounded(lots);
             exports = bounded(exports);
             imports = bounded(imports);
+            citizens = bounded(citizens == null ? List.of() : citizens);
             importable = List.copyOf(importable);
             if (importable.size() > MAX_IMPORTABLE) {
                 throw new IllegalArgumentException("Too many importable items");
@@ -351,6 +372,14 @@ public final class TradeViews {
             buf.writeBoolean(citizenShops);
             buf.writeBoolean(sellToCitizens);
             buf.writeVarLong(soldToCitizens);
+            writeList(buf, citizens, (b, row) -> {
+                b.writeItem(row.sample());
+                b.writeVarLong(row.count());
+                b.writeVarLong(row.price());
+                b.writeVarLong(row.importCost());
+            });
+            buf.writeVarLong(boughtFromCitizens);
+            buf.writeVarLong(boughtItems);
         }
 
         public static MarketView decode(FriendlyByteBuf buf) {
@@ -375,8 +404,14 @@ public final class TradeViews {
             Day day = new Day(TreasuryView.amount(buf), TreasuryView.amount(buf), TreasuryView.amount(buf), buf.readVarInt(), buf.readVarInt(),
                     buf.readVarInt(), TreasuryView.amount(buf), TreasuryView.amount(buf), buf.readVarInt(), buf.readVarInt(), TreasuryView.amount(buf));
             List<String> importable = readList(buf, MAX_IMPORTABLE, b -> b.readUtf(256));
+            int maxEntries = buf.readVarInt();
+            boolean citizenShops = buf.readBoolean();
+            boolean sellToCitizens = buf.readBoolean();
+            long soldToCitizens = TreasuryView.amount(buf);
+            List<CitizenRow> citizens = readList(buf, MAX_ROWS, b -> new CitizenRow(b.readItem(), b.readVarLong(), TreasuryView.amount(b),
+                    TreasuryView.amount(b)));
             return new MarketView(kingdomId, canManage, own, sells, buys, lots, exports, imports, open, foreign, tax, maxTax, fee, maxFee, day,
-                    importable, buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), TreasuryView.amount(buf));
+                    importable, maxEntries, citizenShops, sellToCitizens, soldToCitizens, citizens, TreasuryView.amount(buf), buf.readVarLong());
         }
     }
 
