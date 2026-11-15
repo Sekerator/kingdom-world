@@ -754,6 +754,8 @@ public final class Earthworks {
         if (state.getBlock() instanceof LiquidBlock) {
             level.setBlock(at, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
         } else if (!state.isAir()) {
+            // Frames and paintings on the block go whole to the storehouses first.
+            ConstructionWork.takeThings(level, at, drops);
             drops.addAll(Block.getDrops(state, level, at, null, breaker, PICK));
             level.destroyBlock(at, false, breaker);
         }

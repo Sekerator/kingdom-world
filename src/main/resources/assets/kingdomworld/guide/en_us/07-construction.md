@@ -49,7 +49,7 @@ with the place of a problem, and the list of what is missing. The buttons of the
 |---|---|
 | waits for a builder | hire a builder nearer |
 | lacks materials | bring or order them |
-| a container with items is in the way | empty it |
+| a container with items or a locked one is in the way | empty it or unlock it |
 | blocks paid for: N, put in when the place is loaded | nothing: the server loads the place by itself (see below) |
 | the blocks are being put in | nothing: the place is loaded now and the blocks go in |
 | part of the place is no longer our land | get the land back |
@@ -204,8 +204,11 @@ does, it is brought: ten seconds later it lies at the site, and meanwhile the bu
 ### The order of work
 
 1. **Clearing** from the top down. Blocks in the way are broken and their drops, as from an ordinary break (with a
-   pickaxe from the storehouses if there is one), go to a storehouse. A container holding items is never broken: the
-   construction waits and shows where it is, and the rest of the clearing goes on.
+   pickaxe from the storehouses if there is one), go to a storehouse. A container holding items or locked is never broken:
+   the construction waits and shows where it is, and the rest of the clearing goes on. An empty container that is not
+   locked is taken down and carried to a storehouse as an item. Item frames (with what they hold), paintings and armor
+   stands (with all they wear) in the place of a block or on it are taken down whole and carried to a storehouse: nothing
+   drops on the ground.
 2. **Building** from the bottom up: full and standing blocks first, then leaning and partial ones (torches, doors,
    ladders, carpets, rails, redstone, plants).
 
@@ -260,8 +263,8 @@ profession counts (see [Health, the infirmary and death](health)).
 ### The window of a builder's post
 
 The window shows the current construction and how far it is, what is being placed, how many blocks were placed today
-and why work stands still: "No construction within reach", "Not enough materials" or "A container with items is in
-the way".
+and why work stands still: "No construction within reach", "Not enough materials" or "A container with items or a
+locked one is in the way".
 
 > Builders also build [roads](roads) and the [walls](walls) of cities. Keep a storehouse and a builder's post near the
 > site and planks, cobblestone and glass in stock: then large buildings rise without pauses.

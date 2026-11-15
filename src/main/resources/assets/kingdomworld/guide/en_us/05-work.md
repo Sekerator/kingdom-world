@@ -137,7 +137,7 @@ The "Status" line of the window of a post tells whether the post works and why i
 
 - **No workstation in the zone**, **Not enough materials**, **No fuel in the storehouses**, **No orders** for workshops (see [Workshops](workshops), [The king's orders](orders)).
 - **Nothing to strike: the metals are off or kept in reserve** for a minter (see [The mint](mint)).
-- **No construction within reach**, **Not enough materials**, **A container with items is in the way**, **Cannot reach a block** for a builder (see [Builders and materials](builders)).
+- **No construction within reach**, **Not enough materials**, **A container with items or a locked one is in the way**, **Cannot reach a block** for a builder (see [Builders and materials](builders)).
 
 ## work_gear | Tools and armor
 @icon minecraft:iron_pickaxe

@@ -415,6 +415,78 @@ public final class ConstructionGameTests {
         helper.succeed();
     }
 
+    /**
+     * The clearing of a site takes the things of players down whole and to the storehouse: a frame with a diamond and a painting
+     * on a block in the way, an armor stand with a helmet where a pillar goes. A locked chest in the way, empty as it is, stops
+     * the work until it is unlocked.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_build_clear_things", timeoutTicks = 400)
+    public static void clearingTakesFramesPaintingsAndStandsToTheStorehouseAndLeavesALockedChest(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
+        GatheringGameTests.clear(level, from, to);
+        ConstructionSettings.override(FAST);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Careful Clearers", UUID.randomUUID());
+        BuildingTemplate template = hut("clear_things");
+        StorehouseInventory store = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(0, 0, 4)));
+        fill(store, new ItemStack(Items.COBBLESTONE, 9), new ItemStack(Items.OAK_PLANKS, 2), new ItemStack(Items.TORCH, 1));
+        // A stone where the template wants air, with a frame holding a diamond on its south side and a painting on its west side.
+        helper.setBlock(new BlockPos(6, 1, 6), Blocks.STONE);
+        net.minecraft.world.entity.decoration.ItemFrame frame = new net.minecraft.world.entity.decoration.ItemFrame(level,
+                helper.absolutePos(new BlockPos(6, 1, 7)), net.minecraft.core.Direction.SOUTH);
+        frame.setItem(new ItemStack(Items.DIAMOND));
+        helper.assertTrue(level.addFreshEntity(frame), "The frame was not hung");
+        net.minecraft.world.entity.decoration.Painting painting = new net.minecraft.world.entity.decoration.Painting(level,
+                helper.absolutePos(new BlockPos(5, 1, 6)), net.minecraft.core.Direction.WEST,
+                net.minecraft.core.registries.BuiltInRegistries.PAINTING_VARIANT.getHolderOrThrow(
+                        net.minecraft.world.entity.decoration.PaintingVariants.KEBAB));
+        helper.assertTrue(level.addFreshEntity(painting), "The painting was not hung");
+        // An armor stand with a helmet where a pillar of planks goes.
+        BlockPos standAt = helper.absolutePos(new BlockPos(7, 1, 4));
+        net.minecraft.world.entity.decoration.ArmorStand stand = new net.minecraft.world.entity.decoration.ArmorStand(level,
+                standAt.getX() + 0.5, standAt.getY(), standAt.getZ() + 0.5);
+        stand.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+        helper.assertTrue(level.addFreshEntity(stand), "The armor stand was not put up");
+        // An empty chest, locked, where the template wants air.
+        helper.setBlock(new BlockPos(6, 1, 4), Blocks.CHEST);
+        net.minecraft.world.level.block.entity.BlockEntity chest = level.getBlockEntity(helper.absolutePos(new BlockPos(6, 1, 4)));
+        net.minecraft.nbt.CompoundTag locked = chest.saveWithoutMetadata();
+        locked.putString("Lock", "key of a player");
+        chest.load(locked);
+        WorldPos post = GatheringGameTests.post(helper, new BlockPos(0, 0, 0), "builder");
+        Citizen builder = farBuilder(helper, kingdom, post);
+        Construction construction = lay(helper, kingdom, template, new BlockPos(6, 0, 6));
+        try {
+            workFar(server, builder, 3);
+            ConstructionWork.tick(server, 1);
+            helper.assertTrue(at(helper, 6, 1, 6).isAir(), "The stone is still there");
+            helper.assertTrue(at(helper, 6, 1, 4).is(Blocks.CHEST), "The locked chest was broken");
+            helper.assertTrue(construction.status() == Construction.Status.BLOCKED && CitizenGameTests.at(helper, 6, 1, 4)
+                    .equals(construction.statusPos()), "The construction does not wait at the locked chest: " + construction.status());
+            helper.assertTrue(!frame.isAlive() && !painting.isAlive(), "The frame or the painting still hangs");
+            helper.assertTrue(stored(server, kingdom, Items.ITEM_FRAME) == 1 && stored(server, kingdom, Items.DIAMOND) == 1,
+                    "The frame and its diamond are not in the storehouse");
+            helper.assertTrue(stored(server, kingdom, Items.PAINTING) == 1, "The painting is not in the storehouse");
+            // Unlocked, the empty chest goes to the storehouse too, and the pillar takes the place of the armor stand.
+            net.minecraft.nbt.CompoundTag open = chest.saveWithoutMetadata();
+            open.remove("Lock");
+            chest.load(open);
+            workFar(server, builder, 3);
+            ConstructionWork.tick(server, 1);
+            helper.assertTrue(stored(server, kingdom, Items.CHEST) == 1, "The unlocked chest did not go to the storehouse");
+            helper.assertTrue(at(helper, 7, 1, 4).is(Blocks.OAK_PLANKS), "The pillar was not built where the armor stand stood");
+            helper.assertTrue(!stand.isAlive() && stored(server, kingdom, Items.ARMOR_STAND) == 1
+                    && stored(server, kingdom, Items.IRON_HELMET) == 1, "The armor stand and its helmet are not in the storehouse");
+            helper.assertTrue(level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+                    new net.minecraft.world.phys.AABB(from, to).inflate(2.0)).isEmpty(), "Something was dropped on the ground");
+        } finally {
+            end(helper, kingdom, from, to, template.id(), builder);
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_build_protected")
     public static void blocksNoPlayerCanBreakAndSpawnersStayStanding(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();

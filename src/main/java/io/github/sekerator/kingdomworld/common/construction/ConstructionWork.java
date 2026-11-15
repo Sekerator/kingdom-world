@@ -729,6 +729,9 @@ public final class ConstructionWork {
         if (entity instanceof Container container && !container.isEmpty()) {
             return true;
         }
+        if (owned(entity)) {
+            return true;
+        }
         // A half of a double storehouse holds only what is in its own half.
         IItemHandler handler = entity instanceof io.github.sekerator.kingdomworld.common.storage.StorehouseBlockEntity storehouse
                 ? storehouse.ownHandler() : entity.getCapability(ForgeCapabilities.ITEM_HANDLER, null).orElse(null);
@@ -742,20 +745,100 @@ public final class ConstructionWork {
         return entity.saveWithoutMetadata().contains("LootTable");
     }
 
+    /** Keys under which mods note the owner of a block of theirs. */
+    private static final List<String> OWNER_KEYS = List.of("Owner", "owner", "OwnerUUID", "ownerUUID", "OwnerUuid");
+
     /**
-     * Breaks a block in the way as a player would: its drops go into {@code drops}, liquids just leave. A container with
-     * items and protected blocks are left standing.
+     * Whether a block entity is locked or notes an owner.
+     */
+    static boolean owned(BlockEntity entity) {
+        net.minecraft.nbt.CompoundTag tag = entity.saveWithoutMetadata();
+        if (!tag.getString("Lock").isEmpty()) {
+            return true;
+        }
+        for (String key : OWNER_KEYS) {
+            if (tag.contains(key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Takes down the things of players at a place before the work changes its block: item frames and paintings that hang in it
+     * or on it, and armor stands that stand in it. Nothing is lost: a frame with its item, a stand with what it wears and a
+     * painting go into {@code drops} whole, for the storehouses.
+     *
+     * @return how many things were taken down
+     */
+    public static int takeThings(ServerLevel level, BlockPos pos, List<ItemStack> drops) {
+        net.minecraft.world.phys.AABB cell = new net.minecraft.world.phys.AABB(pos);
+        int taken = 0;
+        for (net.minecraft.world.entity.Entity entity : level.getEntities((net.minecraft.world.entity.Entity) null, cell.inflate(1.0),
+                entity -> entity instanceof net.minecraft.world.entity.decoration.HangingEntity
+                        || entity instanceof net.minecraft.world.entity.decoration.ArmorStand)) {
+            if (!entity.isAlive()) {
+                continue;
+            }
+            if (entity instanceof net.minecraft.world.entity.decoration.HangingEntity hanging) {
+                boolean on = hanging.getPos().relative(hanging.getDirection().getOpposite()).equals(pos);
+                if (!on && !hanging.getBoundingBox().intersects(cell)
+                        || entity instanceof net.minecraft.world.entity.decoration.LeashFenceKnotEntity) {
+                    continue;
+                }
+                if (hanging instanceof net.minecraft.world.entity.decoration.ItemFrame frame) {
+                    drops.add(new ItemStack(frame.getType() == net.minecraft.world.entity.EntityType.GLOW_ITEM_FRAME
+                            ? net.minecraft.world.item.Items.GLOW_ITEM_FRAME : net.minecraft.world.item.Items.ITEM_FRAME));
+                    if (!frame.getItem().isEmpty()) {
+                        drops.add(frame.getItem().copy());
+                    }
+                } else if (hanging instanceof net.minecraft.world.entity.decoration.Painting) {
+                    drops.add(new ItemStack(net.minecraft.world.item.Items.PAINTING));
+                } else {
+                    ItemStack picked = hanging.getPickResult();
+                    if (picked != null && !picked.isEmpty()) {
+                        drops.add(picked.copy());
+                    }
+                }
+            } else if (entity instanceof net.minecraft.world.entity.decoration.ArmorStand stand) {
+                if (!stand.getBoundingBox().intersects(cell) && !stand.blockPosition().equals(pos)) {
+                    continue;
+                }
+                ItemStack item = new ItemStack(net.minecraft.world.item.Items.ARMOR_STAND);
+                if (stand.hasCustomName()) {
+                    item.setHoverName(stand.getCustomName());
+                }
+                drops.add(item);
+                for (net.minecraft.world.entity.EquipmentSlot slot : net.minecraft.world.entity.EquipmentSlot.values()) {
+                    ItemStack worn = stand.getItemBySlot(slot);
+                    if (!worn.isEmpty()) {
+                        drops.add(worn.copy());
+                        stand.setItemSlot(slot, ItemStack.EMPTY);
+                    }
+                }
+            }
+            entity.discard();
+            taken++;
+        }
+        return taken;
+    }
+
+    /**
+     * Breaks a block in the way as a player would: its drops go into {@code drops}, liquids just leave, and the frames,
+     * paintings and armor stands in it or on it are taken down whole first ({@link #takeThings}). A container with items or of
+     * somebody and protected blocks are left standing.
      */
     public static StepResult clear(ServerLevel level, BlockPos pos, @Nullable LivingEntity breaker, ItemStack tool, List<ItemStack> drops) {
         BlockState state = level.getBlockState(pos);
         if (state.isAir() || Scaffolds.is(state)) {
             // A scaffold is not in the way: it drops nothing and its builders take it down when they no longer need it, and a
-            // block placed there replaces it.
+            // block placed there replaces it. An armor stand or a frame in the air of the place goes before a block is laid there.
             return StepResult.DONE;
         }
         if (blocksWork(level, pos, state) || holdsItems(level, pos)) {
             return StepResult.BLOCKED;
         }
+        takeThings(level, pos, drops);
         if (TemplateBlocks.isLiquid(state)) {
             level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
             return StepResult.DONE;
@@ -864,6 +947,10 @@ public final class ConstructionWork {
                 return StepResult.NO_MATERIALS;
             }
             step.cost().forEach(construction::takeDelivered);
+        }
+        if (!wanted.getCollisionShape(level, at).isEmpty()) {
+            // A block takes the place of an armor stand or a frame there: it is taken down whole first.
+            takeThings(level, at, drops);
         }
         Item item = template.blocks().get(step.block()).state().getBlock().asItem();
         place(level, at, wanted, item);
