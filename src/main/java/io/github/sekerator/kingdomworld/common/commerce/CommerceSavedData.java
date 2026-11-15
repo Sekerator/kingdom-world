@@ -34,9 +34,14 @@ public final class CommerceSavedData extends SavedData {
      * @param short_   whether at its last day its shops could not get the goods of the crown they wanted
      * @param missing  the item they lacked most, empty for none
      * @param closed   places where a shop closed of poverty, and the day it did
+     * @param unmet    what its townspeople did not find to buy at its last day by kind of goods, and for building materials what the
+     *                 crown and its head could not buy of its citizens
      */
     public static final class CityTrade {
         long[] carry = new long[io.github.sekerator.kingdomworld.core.commerce.GoodsCategory.values().length];
+        long[] unmet = new long[io.github.sekerator.kingdomworld.core.commerce.GoodsCategory.values().length];
+        /** Building materials wanted of the citizens since the last day of the city; not saved. */
+        long wantedMaterials;
         long unspent;
         boolean short_;
         String missing = "";
@@ -55,6 +60,27 @@ public final class CommerceSavedData extends SavedData {
         public String missing() {
             return missing;
         }
+
+        public long[] unmet() {
+            return unmet.clone();
+        }
+
+        /**
+         * Building materials the crown or the head of the city wanted of its citizens and found none of, worth; a day of the city
+         * hands them to the choice of trades.
+         */
+        public void wantMaterials(long worth) {
+            wantedMaterials = io.github.sekerator.kingdomworld.core.economy.Money.addCapped(wantedMaterials, Math.max(0, worth));
+        }
+    }
+
+    /**
+     * The workstations found at a place of a shop and the day they were looked at.
+     */
+    public record Survey(java.util.Set<String> stations, long day) {
+        public Survey {
+            stations = java.util.Set.copyOf(stations);
+        }
     }
 
     /**
@@ -69,10 +95,19 @@ public final class CommerceSavedData extends SavedData {
     private final Map<String, Counter> counters = new LinkedHashMap<>();
     private final Map<Long, Business> shops = new LinkedHashMap<>();
     private final Map<String, CityTrade> cities = new HashMap<>();
+    private final Map<String, Survey> surveys = new LinkedHashMap<>();
     private long nextId = 1;
+    private long nextCommission = 1;
+    private boolean wired;
 
     public static CommerceSavedData get(MinecraftServer server) {
-        return server.overworld().getDataStorage().computeIfAbsent(CommerceSavedData::load, CommerceSavedData::new, DATA_NAME);
+        CommerceSavedData data = server.overworld().getDataStorage().computeIfAbsent(CommerceSavedData::load, CommerceSavedData::new, DATA_NAME);
+        if (!data.wired) {
+            // The money the crown holds for work paid in advance counts in the money of its currency.
+            data.wired = true;
+            io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.state(server).economy().setHeldElsewhere("commerce", data::held);
+        }
+        return data;
     }
 
     public static CommerceSavedData load(CompoundTag tag) {
@@ -147,6 +182,67 @@ public final class CommerceSavedData extends SavedData {
 
     void restoreNextId(long value) {
         nextId = Math.max(nextId, value);
+    }
+
+    // ---------------------------------------------------------------- the workstations of places
+
+    /**
+     * What is known of the workstations of a place, empty for a place nobody looked at yet.
+     */
+    public Optional<Survey> survey(String placeKey) {
+        return Optional.ofNullable(surveys.get(placeKey));
+    }
+
+    public void putSurvey(String placeKey, Survey survey) {
+        Survey before = surveys.put(placeKey, survey);
+        if (!survey.equals(before)) {
+            setDirty();
+        }
+    }
+
+    Map<String, Survey> surveys() {
+        return surveys;
+    }
+
+    void restoreSurvey(String placeKey, Survey survey) {
+        surveys.put(placeKey, survey);
+    }
+
+    /**
+     * Forgets places whose shops and buildings are gone, keeping those still standing.
+     */
+    public void keepSurveys(java.util.Set<String> standing) {
+        if (surveys.keySet().removeIf(key -> !standing.contains(key))) {
+            setDirty();
+        }
+    }
+
+    // ---------------------------------------------------------------- work paid in advance
+
+    public long nextCommission() {
+        return nextCommission;
+    }
+
+    public long takeCommissionId() {
+        setDirty();
+        return nextCommission++;
+    }
+
+    void restoreNextCommission(long value) {
+        nextCommission = Math.max(nextCommission, value);
+    }
+
+    /**
+     * The money the crown holds for work it paid masters in advance, in the currency of a kingdom.
+     */
+    public long held(java.util.UUID currency) {
+        long sum = 0;
+        for (Business shop : shops.values()) {
+            if (shop.kingdomId().equals(currency)) {
+                sum = io.github.sekerator.kingdomworld.core.economy.Money.addCapped(sum, shop.commissioned());
+            }
+        }
+        return sum;
     }
 
     // ---------------------------------------------------------------- counters

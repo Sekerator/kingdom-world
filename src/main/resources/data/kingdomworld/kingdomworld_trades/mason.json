@@ -1,0 +1,12 @@
+{
+  "kind": "craft",
+  "goods": [
+    "materials"
+  ],
+  "stations": [
+    [
+      "stonecutter"
+    ]
+  ],
+  "profession": "crafter"
+}

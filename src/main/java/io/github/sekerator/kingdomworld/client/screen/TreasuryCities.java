@@ -550,8 +550,17 @@ final class TreasuryCities {
         for (CityViews.ShopRow shop : d.shops()) {
             Component keeper = shop.keeper().isEmpty() ? Component.translatable("kingdomworld.business.status.family")
                     : Component.literal(shop.keeper());
-            lines.add(Component.translatable(KEY + "shop", Component.translatable("kingdomworld.business.trade." + shop.trade()), keeper,
-                    Component.translatable("kingdomworld.business.status." + shop.status()), money(view, shop.sales()), percent(shop.margin())));
+            Component trade = Component.translatable("kingdomworld.business.trade." + shop.trade());
+            if (shop.pinned()) {
+                trade = Component.translatable(KEY + "shop.pinned", trade);
+            }
+            if (shop.made() > 0 || shop.exported() > 0) {
+                lines.add(Component.translatable(KEY + "shop.craft", trade, keeper, money(view, shop.sales()), money(view, shop.made()),
+                        money(view, shop.exported())));
+            } else {
+                lines.add(Component.translatable(KEY + "shop", trade, keeper, Component.translatable("kingdomworld.business.status." + shop.status()),
+                        money(view, shop.sales()), percent(shop.margin())));
+            }
         }
         if (d.shortfall() > 0) {
             lines.add(Component.translatable(KEY + "shortfall", money(view, d.shortfall())));
@@ -603,7 +612,11 @@ final class TreasuryCities {
             int index = scroll + i;
             int lineY = y + i * (LINE + 1);
             int color = index == 0 ? 0xFFF0D070 : 0xFFE0E0E0;
-            screen.name(graphics, lines.get(index).getString(), x, lineY, color, right - x);
+            int drawn = screen.name(graphics, lines.get(index).getString(), x, lineY, color, right - x);
+            if (index > 5) {
+                // A line cut short shows whole under the mouse.
+                screen.hoverText(x, lineY, drawn, lines.get(index));
+            }
             if (index == 0 || index == 2) {
                 for (Component line : statementHover(view)) {
                     screen.hoverText(x, lineY, right - x, line);

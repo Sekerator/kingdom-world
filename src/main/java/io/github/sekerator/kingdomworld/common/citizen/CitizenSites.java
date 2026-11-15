@@ -245,6 +245,8 @@ public final class CitizenSites {
             }
         }
         io.github.sekerator.kingdomworld.common.commerce.ShopCounters.scanned(level, key, owner, counters);
+        // The workstations of the places of shops whose blocks are all loaded now.
+        io.github.sekerator.kingdomworld.common.commerce.PlaceSurvey.chunkScanned(level, key, owner);
     }
 
     /**

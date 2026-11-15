@@ -1682,6 +1682,25 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue tavernEveningPrice;
         public final ForgeConfigSpec.IntValue evasionStartPercent;
         public final ForgeConfigSpec.IntValue evasionMaxPercent;
+        public final ForgeConfigSpec.BooleanValue crownBuysFromCitizens;
+        public final ForgeConfigSpec.IntValue crownBuyCapPercent;
+        public final ForgeConfigSpec.IntValue crownBuyPerDay;
+        public final ForgeConfigSpec.IntValue crownBuyKeepWageDays;
+        public final ForgeConfigSpec.IntValue playerSellPercent;
+        public final ForgeConfigSpec.IntValue playerSellOwnPercent;
+        public final ForgeConfigSpec.IntValue outsideDemandVillage;
+        public final ForgeConfigSpec.IntValue outsideDemandTown;
+        public final ForgeConfigSpec.IntValue outsideDemandCity;
+        public final ForgeConfigSpec.IntValue outsideDemandPerRootPerson;
+        public final ForgeConfigSpec.IntValue outsideDemandFullCities;
+        public final ForgeConfigSpec.IntValue traderBuyPercent;
+        public final ForgeConfigSpec.DoubleValue marketDemandFactor;
+        public final ForgeConfigSpec.IntValue roadLinkPercent;
+        public final ForgeConfigSpec.IntValue craftExportVillage;
+        public final ForgeConfigSpec.IntValue craftExportTown;
+        public final ForgeConfigSpec.IntValue craftExportCity;
+        public final ForgeConfigSpec.BooleanValue regionalMarket;
+        public final ForgeConfigSpec.IntValue houseWhenUnmetPercent;
 
         CityEconomy(ForgeConfigSpec.Builder builder) {
             io.github.sekerator.kingdomworld.core.economy.CityEconomyRules d = io.github.sekerator.kingdomworld.core.economy.CityEconomyRules.DEFAULT;
@@ -1776,6 +1795,65 @@ public final class KingdomWorldConfig {
             evasionMaxPercent = builder
                     .comment("The most of the taxes of a city its people evade, in percent.")
                     .defineInRange("evasionMaxPercent", d.evasionMaxPercent(), 0, 100);
+            io.github.sekerator.kingdomworld.core.commerce.CraftRules c = io.github.sekerator.kingdomworld.core.commerce.CraftRules.DEFAULT;
+            crownBuysFromCitizens = builder
+                    .comment("Whether a kingdom starts buying of the workshops of its citizens what its own workshops cannot make (orders",
+                            "without a workshop or without raw materials, constructions); its king can change it in the Orders tab.")
+                    .define("crownBuysFromCitizens", c.crownBuysFromCitizens());
+            crownBuyCapPercent = builder
+                    .comment("The most the crown pays citizens for an item a kingdom starts with, in percent of its worth.")
+                    .defineInRange("crownBuyCapPercent", c.crownBuyCapPercent(), io.github.sekerator.kingdomworld.core.commerce.CraftRules.MIN_BUY_CAP_PERCENT,
+                            io.github.sekerator.kingdomworld.core.commerce.CraftRules.MAX_BUY_CAP_PERCENT);
+            crownBuyPerDay = builder
+                    .comment("The most the crown spends a day on goods of citizens a kingdom starts with.")
+                    .defineInRange("crownBuyPerDay", (int) c.crownBuyPerDay(), 0, 1_000_000);
+            crownBuyKeepWageDays = builder
+                    .comment("The purchases of the crown from citizens never take its treasury below this many days of wages.")
+                    .defineInRange("crownBuyKeepWageDays", c.crownBuyKeepWageDays(), 0, 365);
+            playerSellPercent = builder
+                    .comment("What a shop of citizens pays a player for an item the crown sells, in percent of the lower of the price of",
+                            "the crown and the worth of the item.")
+                    .defineInRange("playerSellPercent", c.playerSellPercent(), 0, 100);
+            playerSellOwnPercent = builder
+                    .comment("What a shop of citizens pays a player for an item the crown does not sell, in percent of its own price",
+                            "without the tax, never above the worth of the item.")
+                    .defineInRange("playerSellOwnPercent", c.playerSellOwnPercent(), 0, 100);
+            outsideDemandVillage = builder
+                    .comment("The demand from abroad for what the citizens of a village make, worth a day, before its people, roads and",
+                            "market; the trading houses of the city export within it.")
+                    .defineInRange("outsideDemandVillage", (int) c.outsideDemand()[0], 0, 1_000_000);
+            outsideDemandTown = builder.comment("The demand from abroad of a town, worth a day.")
+                    .defineInRange("outsideDemandTown", (int) c.outsideDemand()[1], 0, 1_000_000);
+            outsideDemandCity = builder.comment("The demand from abroad of a large city, worth a day.")
+                    .defineInRange("outsideDemandCity", (int) c.outsideDemand()[2], 0, 1_000_000);
+            outsideDemandPerRootPerson = builder
+                    .comment("More demand from abroad for each square root of the people of a city, worth a day.")
+                    .defineInRange("outsideDemandPerRootPerson", c.outsideDemandPerRootPerson(), 0, 10_000);
+            outsideDemandFullCities = builder
+                    .comment("Cities of a kingdom whose demand from abroad counts in full, the largest first; the city numbered i, from 0,",
+                            "after them counts with the weight of this number divided by i, the market abroad being one for all.")
+                    .defineInRange("outsideDemandFullCities", c.outsideDemandFullCities(), 1, 10_000);
+            traderBuyPercent = builder
+                    .comment("The most a trading house of citizens pays a master, in percent of what it gets abroad.")
+                    .defineInRange("traderBuyPercent", c.traderBuyPercent(), 0, 100);
+            marketDemandFactor = builder
+                    .comment("How many times a working market raises the demand from abroad of its city.")
+                    .defineInRange("marketDemandFactor", c.marketDemandFactor(), 1.0, 10.0);
+            roadLinkPercent = builder
+                    .comment("How much each road from a city to another raises its demand from abroad, in percent, up to twice.")
+                    .defineInRange("roadLinkPercent", c.roadLinkPercent(), 0, 100);
+            craftExportVillage = builder
+                    .comment("What a trading house gets abroad for what citizens made, in percent of the worth: in a village.")
+                    .defineInRange("craftExportVillage", c.craftExport()[0], 0, 100);
+            craftExportTown = builder.comment("In a town.").defineInRange("craftExportTown", c.craftExport()[1], 0, 100);
+            craftExportCity = builder.comment("In a large city.").defineInRange("craftExportCity", c.craftExport()[2], 0, 100);
+            regionalMarket = builder
+                    .comment("Whether townspeople also buy in the shops of the nearest larger city of their kingdom on a road.")
+                    .define("regionalMarket", c.regionalMarket());
+            houseWhenUnmetPercent = builder
+                    .comment("When the townspeople of a city do not find more than this share of their basket and have no free place for",
+                            "a shop, its head wants a house of a merchant or a craftsman.")
+                    .defineInRange("houseWhenUnmetPercent", c.houseWhenUnmetPercent(), 0, 100);
             builder.pop();
         }
     }

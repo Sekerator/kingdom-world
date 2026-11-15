@@ -140,8 +140,16 @@ public final class CityViews {
      * @param sales   what it sold a day, the last week
      * @param margin  its margin in thousandths
      * @param debt    what it still owes the crown
+     * @param pinned  whether its trade is fixed
+     * @param made    the worth its masters made a day, the last week
+     * @param exported what came from abroad a day for what it exported, the last week
      */
-    public record ShopRow(long id, String trade, String keeper, String status, long sales, int margin, long debt) {
+    public record ShopRow(long id, String trade, String keeper, String status, long sales, int margin, long debt, boolean pinned, long made,
+                          long exported) {
+        public ShopRow(long id, String trade, String keeper, String status, long sales, int margin, long debt) {
+            this(id, trade, keeper, status, sales, margin, debt, false, 0, 0);
+        }
+
         public ShopRow {
             Objects.requireNonNull(trade, "trade");
             Objects.requireNonNull(keeper, "keeper");
@@ -157,11 +165,14 @@ public final class CityViews {
             buf.writeVarLong(sales);
             buf.writeVarInt(margin);
             buf.writeVarLong(debt);
+            buf.writeBoolean(pinned);
+            buf.writeVarLong(made);
+            buf.writeVarLong(exported);
         }
 
         static ShopRow decode(FriendlyByteBuf buf) {
             return new ShopRow(buf.readVarLong(), buf.readUtf(MAX_NAME), buf.readUtf(MAX_NAME), buf.readUtf(MAX_NAME), amount(buf),
-                    buf.readVarInt(), amount(buf));
+                    buf.readVarInt(), amount(buf), buf.readBoolean(), amount(buf), amount(buf));
         }
     }
 

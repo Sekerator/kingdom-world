@@ -13,21 +13,26 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * NBT form of the shops of citizens (format 1):
+ * NBT form of the shops of citizens (format 2):
  *
  * <pre>
- * { formatVersion: 1, nextId,
- *   shops: [ { id, kingdom, city, place: { kind, building, index, dimension, x, y, z }, trade, keepers: [ uuid ], family,
- *              goods: [ { item, category, count, cost } ], debt, margin, status, poorDays, opened, profitDue,
- *              days: [ { day, values: long[] } ] } ],
- *   cities: [ { key, carry: long[], unspent, short, missing, places, keepers, closed: [ { place, day } ] } ],
+ * { formatVersion: 2, nextId, nextCommission,
+ *   shops: [ { id, kingdom, city, place: { kind, building, index, dimension, x, y, z }, trade, pinned, nextTrade, tradeSince,
+ *              keepers: [ { id, share } ], family,
+ *              goods: [ { item, category, count, cost, labor, made } ], inputs: [ { item, count, cost, labor } ], fuel, fuelCost,
+ *              commissions: [ { id, order, item, count, paid, day } ],
+ *              debt, margin, status, poorDays, opened, profitDue, days: [ { day, values: long[] } ] } ],
+ *   cities: [ { key, carry: long[], unmet: long[], unspent, short, missing, places, keepers, closed: [ { place, day } ] } ],
+ *   surveys: [ { place, day, stations: [ string ] } ],
  *   counters: [ { kingdom, dimension, x, y, z } ] }
  * </pre>
  *
- * <p>Reading is strict: what cannot be understood throws, and the caller loses the shops rather than half of them.
+ * <p>Format 1, the shops before the crafts, reads as general stores whose places were never looked at, their days of trade
+ * padded with the new values; its goods were all bought. Reading is strict: what cannot be understood throws, and the caller loses
+ * the shops rather than half of them.
  */
 public final class CommerceNbt {
-    public static final int FORMAT_VERSION = 1;
+    public static final int FORMAT_VERSION = 2;
 
     private CommerceNbt() {
     }
@@ -35,6 +40,7 @@ public final class CommerceNbt {
     public static CompoundTag write(CommerceSavedData data, CompoundTag tag) {
         tag.putInt("formatVersion", FORMAT_VERSION);
         tag.putLong("nextId", data.nextId());
+        tag.putLong("nextCommission", data.nextCommission());
         ListTag shops = new ListTag();
         for (Business shop : data.shops().values()) {
             shops.add(writeShop(shop));
@@ -45,6 +51,7 @@ public final class CommerceNbt {
             CompoundTag city = new CompoundTag();
             city.putString("key", key);
             city.put("carry", new LongArrayTag(trade.carry.clone()));
+            city.put("unmet", new LongArrayTag(trade.unmet.clone()));
             city.putLong("unspent", trade.unspent);
             city.putBoolean("short", trade.short_);
             city.putString("missing", trade.missing);
@@ -61,6 +68,19 @@ public final class CommerceNbt {
             cities.add(city);
         });
         tag.put("cities", cities);
+        ListTag surveys = new ListTag();
+        data.surveys().forEach((place, survey) -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putString("place", place);
+            entry.putLong("day", survey.day());
+            ListTag stations = new ListTag();
+            for (String station : survey.stations()) {
+                stations.add(net.minecraft.nbt.StringTag.valueOf(station));
+            }
+            entry.put("stations", stations);
+            surveys.add(entry);
+        });
+        tag.put("surveys", surveys);
         ListTag counters = new ListTag();
         for (CommerceSavedData.Counter counter : data.counters().values()) {
             CompoundTag entry = new CompoundTag();
@@ -90,24 +110,55 @@ public final class CommerceNbt {
         place.putInt("z", shop.place().z());
         tag.put("place", place);
         tag.putString("trade", shop.trade());
+        tag.putString("pinned", shop.pinned());
+        tag.putString("nextTrade", shop.nextTrade());
+        tag.putLong("tradeSince", shop.tradeSince());
         ListTag keepers = new ListTag();
-        for (UUID keeper : shop.keepers()) {
+        int[] shares = shop.shares();
+        for (int i = 0; i < shop.keepers().size(); i++) {
             CompoundTag entry = new CompoundTag();
-            entry.putUUID("id", keeper);
+            entry.putUUID("id", shop.keepers().get(i));
+            entry.putInt("share", i < shares.length ? shares[i] : Business.KEEPER_SHARE);
             keepers.add(entry);
         }
         tag.put("keepers", keepers);
         tag.putBoolean("family", shop.family());
         ListTag goods = new ListTag();
-        shop.goods().forEach((item, lot) -> {
+        shop.goods().forEach((key, lot) -> {
             CompoundTag entry = new CompoundTag();
-            entry.putString("item", item);
+            entry.putString("item", Business.itemOf(key));
             entry.putString("category", GoodsCategory.values()[Math.max(0, Math.min(GoodsCategory.values().length - 1, lot.category()))].id());
             entry.putLong("count", lot.count());
             entry.putLong("cost", lot.costMilli());
+            entry.putLong("labor", lot.laborMilli());
+            entry.putBoolean("made", Business.isMade(key));
             goods.add(entry);
         });
         tag.put("goods", goods);
+        ListTag inputs = new ListTag();
+        shop.inputs().forEach((item, lot) -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putString("item", item);
+            entry.putLong("count", lot.count());
+            entry.putLong("cost", lot.costMilli());
+            entry.putLong("labor", lot.laborMilli());
+            inputs.add(entry);
+        });
+        tag.put("inputs", inputs);
+        tag.putLong("fuel", shop.fuelTicks());
+        tag.putLong("fuelCost", shop.fuelCostMilli());
+        ListTag commissions = new ListTag();
+        for (Business.Commission commission : shop.commissions()) {
+            CompoundTag entry = new CompoundTag();
+            entry.putLong("id", commission.id());
+            entry.putLong("order", commission.order());
+            entry.putString("item", commission.item());
+            entry.putInt("count", commission.count());
+            entry.putLong("paid", commission.paid());
+            entry.putLong("day", commission.day());
+            commissions.add(entry);
+        }
+        tag.put("commissions", commissions);
         tag.putLong("debt", shop.debt());
         tag.putInt("margin", shop.marginPermille());
         tag.putString("status", shop.status().id());
@@ -147,14 +198,33 @@ public final class CommerceNbt {
                 .orElseThrow(() -> new IllegalArgumentException("A shop of an unknown state " + tag.getString("status")));
         shop.restore(tag.getString("trade"), keepers, tag.getBoolean("family"), tag.getLong("debt"), tag.getInt("margin"), status,
                 tag.getInt("poorDays"), tag.getLong("profitDue"));
+        shop.restoreTrade(tag.getString("pinned"), tag.getString("nextTrade"), tag.contains("tradeSince") ? tag.getLong("tradeSince")
+                : tag.getLong("opened"));
         for (CompoundTag entry : compounds(tag, "goods")) {
             GoodsCategory category = GoodsCategory.byId(entry.getString("category"))
                     .orElseThrow(() -> new IllegalArgumentException("Goods of an unknown kind " + entry.getString("category")));
             String item = entry.getString("item");
-            if (item.isEmpty() || entry.getLong("count") < 0 || entry.getLong("cost") < 0) {
+            if (item.isEmpty() || entry.getLong("count") < 0 || entry.getLong("cost") < 0 || entry.getLong("labor") < 0) {
                 throw new IllegalArgumentException("Goods that cannot be read");
             }
-            shop.restoreGoods(item, new Business.Lot(category.ordinal(), entry.getLong("count"), entry.getLong("cost")));
+            boolean made = entry.getBoolean("made");
+            shop.restoreGoods(Business.key(item, made), new Business.Lot(category.ordinal(), entry.getLong("count"), entry.getLong("cost"),
+                    entry.getLong("labor"), made));
+        }
+        for (CompoundTag entry : compounds(tag, "inputs")) {
+            String item = entry.getString("item");
+            if (item.isEmpty() || entry.getLong("count") < 0 || entry.getLong("cost") < 0 || entry.getLong("labor") < 0) {
+                throw new IllegalArgumentException("Raw materials that cannot be read");
+            }
+            shop.restoreInput(item, new Business.Lot(-1, entry.getLong("count"), entry.getLong("cost"), entry.getLong("labor"), false));
+        }
+        shop.setFuel(tag.getLong("fuel"), tag.getLong("fuelCost"));
+        for (CompoundTag entry : compounds(tag, "commissions")) {
+            if (entry.getString("item").isEmpty() || entry.getLong("paid") < 0) {
+                throw new IllegalArgumentException("Work paid in advance that cannot be read");
+            }
+            shop.addCommission(new Business.Commission(entry.getLong("id"), entry.getLong("order"), entry.getString("item"), entry.getInt("count"),
+                    entry.getLong("paid"), entry.getLong("day")));
         }
         for (CompoundTag entry : compounds(tag, "days")) {
             shop.restoreDay(entry.getLong("day"), entry.getLongArray("values"));
@@ -167,6 +237,7 @@ public final class CommerceNbt {
             throw new IllegalArgumentException("The shops were saved by a newer version (format " + tag.getInt("formatVersion") + ")");
         }
         data.restoreNextId(tag.getLong("nextId"));
+        data.restoreNextCommission(tag.getLong("nextCommission"));
         for (CompoundTag entry : compounds(tag, "shops")) {
             data.restore(readShop(entry));
         }
@@ -174,6 +245,8 @@ public final class CommerceNbt {
             CommerceSavedData.CityTrade trade = new CommerceSavedData.CityTrade();
             long[] carry = entry.getLongArray("carry");
             System.arraycopy(carry, 0, trade.carry, 0, Math.min(carry.length, trade.carry.length));
+            long[] unmet = entry.getLongArray("unmet");
+            System.arraycopy(unmet, 0, trade.unmet, 0, Math.min(unmet.length, trade.unmet.length));
             trade.unspent = Math.max(0, entry.getLong("unspent"));
             trade.short_ = entry.getBoolean("short");
             trade.missing = entry.getString("missing");
@@ -183,6 +256,14 @@ public final class CommerceNbt {
                 trade.closed.put(closed.getString("place"), closed.getLong("day"));
             }
             data.restoreCity(entry.getString("key"), trade);
+        }
+        for (CompoundTag entry : compounds(tag, "surveys")) {
+            java.util.Set<String> stations = new java.util.LinkedHashSet<>();
+            ListTag list = entry.getList("stations", Tag.TAG_STRING);
+            for (int i = 0; i < list.size(); i++) {
+                stations.add(list.getString(i));
+            }
+            data.restoreSurvey(entry.getString("place"), new CommerceSavedData.Survey(stations, entry.getLong("day")));
         }
         for (CompoundTag entry : compounds(tag, "counters")) {
             if (!entry.hasUUID("kingdom")) {

@@ -1,0 +1,13 @@
+{
+  "kind": "craft",
+  "goods": [
+    "household",
+    "materials"
+  ],
+  "stations": [
+    [
+      "furnace"
+    ]
+  ],
+  "profession": "smelter"
+}

@@ -1,0 +1,17 @@
+{
+  "kind": "craft",
+  "goods": [
+    "household",
+    "materials",
+    "tools"
+  ],
+  "stations": [
+    [
+      "crafting_table"
+    ]
+  ],
+  "profession": "crafter",
+  "only": {
+    "tools": "kingdomworld:goods/wooden_tools"
+  }
+}

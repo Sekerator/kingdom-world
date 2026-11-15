@@ -18,10 +18,16 @@ import io.github.sekerator.kingdomworld.common.trade.TradeSettings;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.commerce.Business;
+import io.github.sekerator.kingdomworld.core.commerce.CityDay;
+import io.github.sekerator.kingdomworld.core.commerce.CraftRules;
 import io.github.sekerator.kingdomworld.core.commerce.Evasion;
 import io.github.sekerator.kingdomworld.core.commerce.GoodsCategory;
+import io.github.sekerator.kingdomworld.core.commerce.ShopMaking;
 import io.github.sekerator.kingdomworld.core.commerce.ShopPricing;
+import io.github.sekerator.kingdomworld.core.commerce.Trade;
+import io.github.sekerator.kingdomworld.core.commerce.TradeRegistry;
 import io.github.sekerator.kingdomworld.core.construction.Building;
+import io.github.sekerator.kingdomworld.core.economy.CityEconomyRules;
 import io.github.sekerator.kingdomworld.core.economy.CityPurses;
 import io.github.sekerator.kingdomworld.core.economy.CityStatement;
 import io.github.sekerator.kingdomworld.core.economy.Economy;
@@ -30,27 +36,34 @@ import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
 import io.github.sekerator.kingdomworld.core.life.DaySchedule;
+import io.github.sekerator.kingdomworld.core.membership.Permission;
+import io.github.sekerator.kingdomworld.core.trade.Market;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
  * Players in the shops of citizens: a click on a counter or on a keeper opens the window of the shop, a click on a person of a
  * house in the evening that of the family shop of the house. A player buys from the goods of the shop, whole items that fit into
  * the inventory, from the account or with coins in the currency of the kingdom of the shop only: the price into the till, the
- * tax into the treasury of the city. Strangers are served while the market of the kingdom is open to them.
+ * tax into the treasury of the city. A player sells a shop what it can sell on at a profit (goods of its trade, raw materials of
+ * its workshop) for a share of the lower of the price of the crown and the worth, onto the account, out of the till. Strangers are
+ * served while the market of the kingdom is open to them. A member with the right over citizens fixes the trade of the place.
  */
 public final class ShopActions {
     private static final String KEY = "kingdomworld.screen.shop.";
@@ -131,7 +144,7 @@ public final class ShopActions {
     // ---------------------------------------------------------------- the view
 
     /**
-     * Why a player may not buy in a shop now, or empty when it may.
+     * Why a player may not trade with a shop now, or empty when it may.
      */
     static Optional<String> refusal(ServerPlayer player, Business shop) {
         MinecraftServer server = player.server;
@@ -207,14 +220,14 @@ public final class ShopActions {
     }
 
     /**
-     * What one of the goods of a shop costs a player without the tax, in whole coins, for a number of them: the price of the shop
-     * as the reputation of the player makes it, never below what the shop paid.
+     * What goods of a shop cost a player without the tax, in whole coins, for a number of them: the price of the shop as the
+     * reputation of the player makes it, never below what they cost the shop with the work in them.
      */
     static long playerTotal(MinecraftServer server, Business shop, UUID player, Business.Lot lot, Item item, long count) {
-        long asked = ShopPricing.askedMilli(lot.costMilli(), shop.marginPermille(), Shops.ceilingMilli(server, item));
+        long asked = ShopMaking.askedMilli(lot, shop.marginPermille(), Shops.ceilingMilli(server, item));
         long total = ShopPricing.total(asked, count);
         long reputation = LawWork.priceFor(server, shop.kingdomId(), player, total);
-        return Math.max(ShopPricing.total(lot.costMilli(), count), reputation);
+        return Math.max(ShopPricing.total(lot.baseMilli(), count), reputation);
     }
 
     static ShopView view(ServerPlayer player, Business shop) {
@@ -225,20 +238,20 @@ public final class ShopActions {
         List<Map.Entry<String, Business.Lot>> goods = new ArrayList<>(shop.goods().entrySet());
         Map<String, Long> unit = new HashMap<>();
         for (Map.Entry<String, Business.Lot> entry : goods) {
-            Item item = GoodsStacks.item(entry.getKey());
+            Item item = GoodsStacks.item(Business.itemOf(entry.getKey()));
             unit.put(entry.getKey(), item == null ? Long.MAX_VALUE : playerTotal(server, shop, player.getUUID(), entry.getValue(), item, 1));
         }
         goods.sort(Comparator.comparingLong((Map.Entry<String, Business.Lot> entry) -> unit.get(entry.getKey())).thenComparing(Map.Entry::getKey));
         int page = Math.max(0, Math.min(PAGES.getOrDefault(player.getUUID(), 0), (goods.size() - 1) / ShopView.PAGE));
         for (int i = page * ShopView.PAGE; i < goods.size() && rows.size() < ShopView.PAGE; i++) {
             Map.Entry<String, Business.Lot> entry = goods.get(i);
-            Item item = GoodsStacks.item(entry.getKey());
+            Item item = GoodsStacks.item(Business.itemOf(entry.getKey()));
             if (item == null) {
                 continue;
             }
             long total = unit.get(entry.getKey());
             long taxOf = ShopPricing.tax(total, tax);
-            rows.add(new ShopView.Row(new ItemStack(item), entry.getValue().count(), total + taxOf, taxOf));
+            rows.add(new ShopView.Row(new ItemStack(item), entry.getValue().count(), total + taxOf, taxOf, entry.getKey(), entry.getValue().made()));
         }
         Optional<Kingdom> kingdom = KingdomWorldApi.kingdom(server, shop.kingdomId());
         String kingdomName = kingdom.map(Kingdom::name).orElse("?");
@@ -251,7 +264,46 @@ public final class ShopActions {
         return new ShopView(shop.id(), shop.kingdomId(), kingdomName.length() > ShopView.MAX_NAME ? kingdomName.substring(0, ShopView.MAX_NAME) : kingdomName,
                 currency.length() > ShopView.MAX_NAME ? currency.substring(0, ShopView.MAX_NAME) : currency, silver, gold, shop.trade(),
                 Shops.keeperNames(server, shop), shop.status().id(), rows, page, goods.size(), shop.marginPermille(), tax,
-                shop.averageSales(day + 1), shop.debt(), refused.isEmpty(), refused.orElse(""));
+                shop.averageSales(day + 1), shop.debt(), refused.isEmpty(), refused.orElse(""), workshop(player, shop), sellRows(player, shop));
+    }
+
+    /**
+     * The trade of a shop and its place for its window.
+     */
+    private static ShopView.Workshop workshop(ServerPlayer player, Business shop) {
+        MinecraftServer server = player.server;
+        Optional<Set<String>> stations = PlaceSurvey.stations(server, shop.place().key());
+        List<String> trades = new ArrayList<>();
+        for (Trade trade : TradeRegistry.current().all()) {
+            if (fixable(server, shop, trade, stations.orElse(Set.of()))) {
+                trades.add(trade.id());
+            }
+        }
+        boolean canPin = KingdomWorldApi.state(server).membership().hasPermission(player.getUUID(), shop.kingdomId(), Permission.MANAGE_CITIZENS);
+        return new ShopView.Workshop(new ArrayList<>(stations.orElse(Set.of())), stations.isPresent(), shop.pinned(), shop.nextTrade(), trades,
+                canPin);
+    }
+
+    /**
+     * Whether a trade may be fixed for the place of a shop: the general store anywhere, a craft where its workstations stand, a
+     * trading house in a house of a merchant or where a market works.
+     */
+    private static boolean fixable(MinecraftServer server, Business shop, Trade trade, Set<String> stations) {
+        if (trade.kind() == Trade.Kind.RESALE) {
+            return true;
+        }
+        if (trade.craft()) {
+            return trade.fits(stations);
+        }
+        if (shop.place().kind() == Business.PlaceKind.MERCHANT_HOUSE) {
+            return true;
+        }
+        for (BusinessPlaces.Spot spot : BusinessPlaces.of(server, shop.kingdomId(), shop.cityId())) {
+            if (spot.place().kind() == Business.PlaceKind.MARKET_STALL) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ---------------------------------------------------------------- buying
@@ -278,7 +330,7 @@ public final class ShopActions {
             return KingdomActions.Feedback.fail(refused.get());
         }
         Business.Lot lot = shop.goods().get(trade.item());
-        Item item = GoodsStacks.item(trade.item());
+        Item item = GoodsStacks.item(Business.itemOf(trade.item()));
         if (lot == null || item == null || lot.count() < trade.count()) {
             return KingdomActions.Feedback.fail(KEY + "less_stock");
         }
@@ -314,9 +366,7 @@ public final class ShopActions {
         if (prepared instanceof KingdomActions.Feedback feedback) {
             if (!trade.account() && Purses.plan(player, kingdom, cost).isEmpty()) {
                 // Coins of another currency do not count: the shop takes only its own.
-                String currency = MoneyTexts.currencyShort(economy.treasury(kingdom).map(t -> t.currencyName()).orElse(""),
-                        KingdomWorldApi.kingdom(server, kingdom).map(Kingdom::name).orElse("?")).getString();
-                return KingdomActions.Feedback.fail(KEY + "only_currency", currency);
+                return KingdomActions.Feedback.fail(KEY + "only_currency", currencyName(server, kingdom));
             }
             return feedback;
         }
@@ -350,6 +400,302 @@ public final class ShopActions {
         LawWork.traded(server, kingdom, player.getUUID(), cost);
         return KingdomActions.Feedback.ok(KEY + "bought", trade.count(), new ItemStack(item).getHoverName(),
                 MoneyTexts.amount(cost, Purses.units(server, kingdom)));
+    }
+
+    private static String currencyName(MinecraftServer server, UUID kingdom) {
+        return MoneyTexts.currencyShort(KingdomWorldApi.state(server).economy().treasury(kingdom).map(t -> t.currencyName()).orElse(""),
+                KingdomWorldApi.kingdom(server, kingdom).map(Kingdom::name).orElse("?")).getString();
+    }
+
+    // ---------------------------------------------------------------- selling
+
+    /**
+     * What a shop pays a player for one of an item and how many it takes.
+     *
+     * @param unit  what it pays for one
+     * @param max   how many it takes by its stock and its needs
+     * @param money how many its till can pay for
+     * @param goods whether the item goes among its goods, else among the raw materials of its workshop
+     */
+    record SellOffer(long unit, long max, long money, boolean goods) {
+    }
+
+    /**
+     * What a shop would pay a player for items: the share of the lower of the price of the crown and the worth for an item the
+     * crown sells, else the share of its own price without the tax, both never above the worth, the reputation of the player too.
+     * It takes goods of its trade it can sell at least a little above that under the ceiling of their price, up to its target, and
+     * the raw materials of what its workshop makes under that ceiling, as much as a day of its work uses; the general store takes
+     * goods only of the kinds it lacks. Empty when it takes none of the item.
+     *
+     * @param counts the count of each item in the storehouses
+     */
+    static Optional<SellOffer> sellOffer(MinecraftServer server, Business shop, UUID player, Item item, Map<String, Long> counts) {
+        if (shop.trader() || shop.status() == Business.Status.CLOSING || !shop.nextTrade().isEmpty()) {
+            return Optional.empty();
+        }
+        UUID kingdom = shop.kingdomId();
+        CraftRules craft = CraftSettings.rules();
+        CityEconomyRules rules = CityEconomySettings.rules();
+        String id = GoodsStacks.itemId(item);
+        double worth = Shops.worth(server, item);
+        long worthCoins = (long) Math.floor(worth);
+        long stock = counts.getOrDefault(id, 0L);
+        Market market = KingdomWorldApi.state(server).trade().market(kingdom, TradeSettings.rules());
+        Optional<Market.SellEntry> entry = market.sell(id);
+        boolean crownSells = entry.isPresent() && entry.get().price() > 0 || stock > 0;
+        long unit;
+        if (crownSells) {
+            long crown = Shops.crownPrice(server, kingdom, id, item, stock);
+            unit = (long) Math.floor(Math.min(crown, worth) * craft.playerSellPercent() / 100.0);
+        } else {
+            long own = ownPriceMilli(server, shop, id);
+            double base = own > 0 ? Math.min(own / (double) ShopPricing.MILLI, worth) : worth;
+            unit = (long) Math.floor(base * craft.playerSellOwnPercent() / 100.0);
+        }
+        unit = Math.min(LawWork.payoutFor(server, kingdom, player, unit), worthCoins);
+        if (unit < 1) {
+            return Optional.empty();
+        }
+        int category = Shops.categoryOf(server, item);
+        Trade trade = Workshops.trade(shop);
+        long freeMoney = Math.max(0, KingdomWorldApi.state(server).economy().purse(CityPurses.PurseKey.till(kingdom, shop.id())) - shop.profitDue());
+        long byMoney = freeMoney / unit;
+        long day = TreasuryActions.day(server);
+        double strength = Shops.strength(server, shop, 0, rules);
+        if (category >= 0 && (trade.makes(category) && shop.crafts() || !shop.crafts())) {
+            if (!ShopPricing.worthBuying(unit * ShopPricing.MILLI, Shops.ceilingMilli(server, item))) {
+                return Optional.empty();
+            }
+            GoodsCategory kind = GoodsCategory.values()[category];
+            long average = shop.averageCategory(day, category);
+            long target = shop.crafts()
+                    ? ShopMaking.target(average, strength, ShopMaking.sharePercent(kind, rules.basket()), rules.stockDays(), 0)
+                    : CityDay.stockTarget(average, strength, ShopMaking.sharePercent(kind, rules.basket()), rules.stockDays());
+            long lacking = target - Shops.heldWorth(server, shop, category);
+            long max = lacking <= 0 ? 0 : (long) Math.floor(lacking / Math.max(0.01, worth));
+            if (max <= 0 && !shop.crafts()) {
+                return Optional.empty();
+            }
+            return Optional.of(new SellOffer(unit, Math.max(0, max), byMoney, true));
+        }
+        if (!shop.crafts()) {
+            return Optional.empty();
+        }
+        long rawMax = rawWanted(server, shop, trade, id, unit, counts);
+        if (rawMax < 0) {
+            return Optional.empty();
+        }
+        return Optional.of(new SellOffer(unit, rawMax, byMoney, false));
+    }
+
+    /**
+     * The price the shop asks for an item without the tax, in thousandths, or 0 when it has none.
+     */
+    private static long ownPriceMilli(MinecraftServer server, Business shop, String id) {
+        long best = 0;
+        for (boolean made : new boolean[]{false, true}) {
+            String key = Business.key(id, made);
+            Business.Lot lot = shop.goods().get(key);
+            if (lot != null) {
+                long asked = Shops.askedMilli(server, shop, key, lot);
+                best = best == 0 ? asked : Math.min(best, asked);
+            }
+        }
+        return best;
+    }
+
+    /**
+     * How many of a raw material the workshop of a shop takes at a price: as much as a day of its target work uses beyond what it
+     * holds, of what it makes with it under the ceiling of the price; below 0 when it makes nothing of it at that price.
+     */
+    private static long rawWanted(MinecraftServer server, Business shop, Trade trade, String id, long unit, Map<String, Long> counts) {
+        Set<String> stations = Workshops.placeStations(server, shop);
+        if (!trade.fits(stations)) {
+            return -1;
+        }
+        UUID kingdom = shop.kingdomId();
+        ShopMaking.Context context = Workshops.context(server, trade, stations, other -> {
+            if (other.equals(id)) {
+                return unit * ShopPricing.MILLI;
+            }
+            Item item = GoodsStacks.item(other);
+            long stock = counts.getOrDefault(other, 0L);
+            return item == null || stock <= 0 ? -1 : Shops.crownPrice(server, kingdom, other, item, stock) * ShopPricing.MILLI;
+        }, null);
+        ShopMaking.Planner planner = new ShopMaking.Planner(context);
+        Map<String, Long> have = new HashMap<>();
+        shop.inputs().forEach((item, lot) -> have.put(item, lot.count()));
+        CityEconomyRules rules = CityEconomySettings.rules();
+        double strength = Shops.strength(server, shop, 0, rules);
+        long day = TreasuryActions.day(server);
+        long wanted = -1;
+        for (Map.Entry<GoodsCategory, List<String>> entry : Workshops.candidates(server, trade, stations).entrySet()) {
+            for (String product : entry.getValue()) {
+                long unitMilli = planner.madeUnitMilli(product);
+                if (!ShopPricing.worthBuying(Math.max(1, unitMilli), Shops.ceilingMilli(server, product))) {
+                    continue;
+                }
+                long target = ShopMaking.target(shop.averageCategory(day, entry.getKey().ordinal()), strength,
+                        ShopMaking.sharePercent(entry.getKey(), rules.basket()), rules.stockDays(), 0);
+                long count = Math.max(1, (long) Math.ceil(target / Math.max(0.01, Shops.worth(server, product))));
+                Optional<ShopMaking.Plan> plan = ShopMaking.plan(planner, product, entry.getKey().ordinal(), count, have, shop.fuelTicks());
+                if (plan.isEmpty() || !plan.get().buy().containsKey(id) && !plan.get().held().containsKey(id)) {
+                    continue;
+                }
+                wanted = Math.max(wanted, plan.get().buy().getOrDefault(id, 0L));
+            }
+        }
+        return wanted;
+    }
+
+    private static List<ShopView.SellRow> sellRows(ServerPlayer player, Business shop) {
+        MinecraftServer server = player.server;
+        Inventory inventory = player.getInventory();
+        Map<Item, Integer> have = new LinkedHashMap<>();
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            ItemStack stack = inventory.getItem(slot);
+            if (!stack.isEmpty() && GoodsStacks.plain(stack)) {
+                have.merge(stack.getItem(), stack.getCount(), Integer::sum);
+            }
+        }
+        if (have.isEmpty() || shop.trader()) {
+            return List.of();
+        }
+        Map<String, Long> counts = KingdomStorage.countsById(server, shop.kingdomId());
+        List<ShopView.SellRow> rows = new ArrayList<>();
+        for (Map.Entry<Item, Integer> entry : have.entrySet()) {
+            if (rows.size() >= ShopView.MAX_SELL) {
+                break;
+            }
+            sellOffer(server, shop, player.getUUID(), entry.getKey(), counts).ifPresent(offer -> rows.add(new ShopView.SellRow(new ItemStack(entry.getKey()),
+                    offer.unit(), offer.max(), offer.money(), entry.getValue())));
+        }
+        return rows;
+    }
+
+    public static void sell(ServerPlayer player, CommercePackets.ShopTrade trade) {
+        MinecraftServer server = player.server;
+        Optional<Business> found = CommerceSavedData.get(server).shop(trade.shopId());
+        if (found.isEmpty()) {
+            KingdomActions.reply(player, KingdomActions.Feedback.fail(KEY + "gone"));
+            return;
+        }
+        Business shop = found.get();
+        KingdomActions.reply(player, sale(player, shop, trade));
+        open(player, shop, false);
+    }
+
+    /**
+     * A player sells a shop items of the inventory: whole plain items, as many as it takes and its till pays for, onto the account
+     * of the player in the currency of the kingdom of the shop.
+     */
+    public static KingdomActions.Feedback sale(ServerPlayer player, Business shop, CommercePackets.ShopTrade trade) {
+        MinecraftServer server = player.server;
+        if (KingdomWorldApi.isReadOnly(server)) {
+            return KingdomActions.Feedback.error(KingdomError.READ_ONLY);
+        }
+        Optional<String> refused = refusal(player, shop);
+        if (refused.isPresent()) {
+            return KingdomActions.Feedback.fail(refused.get());
+        }
+        Item item = GoodsStacks.item(trade.item());
+        if (item == null) {
+            return KingdomActions.Feedback.fail(KEY + "not_wanted");
+        }
+        int have = GoodsStacks.countPlain(player.getInventory(), item);
+        if (have <= 0) {
+            return KingdomActions.Feedback.error(KingdomError.NO_ITEMS);
+        }
+        UUID kingdom = shop.kingdomId();
+        Optional<SellOffer> offer = sellOffer(server, shop, player.getUUID(), item, KingdomStorage.countsById(server, kingdom));
+        if (offer.isEmpty() || offer.get().max() <= 0) {
+            return KingdomActions.Feedback.fail(KEY + "not_wanted");
+        }
+        if (offer.get().unit() < trade.seen()) {
+            return KingdomActions.Feedback.fail(KEY + "price_changed");
+        }
+        if (offer.get().money() <= 0) {
+            return KingdomActions.Feedback.fail(KEY + "till_short");
+        }
+        long count = Math.min(Math.min(trade.count(), have), Math.min(offer.get().max(), offer.get().money()));
+        long total = Money.multiplyCapped(offer.get().unit(), count);
+        Economy economy = KingdomWorldApi.state(server).economy();
+        CityPurses.PurseKey till = CityPurses.PurseKey.till(kingdom, shop.id());
+        if (economy.purse(till) - shop.profitDue() < total) {
+            return KingdomActions.Feedback.fail(KEY + "till_short");
+        }
+        int taken = GoodsStacks.takePlain(player.getInventory(), item, (int) count);
+        if (taken != count) {
+            GoodsStacks.give(player, new ItemStack(item, taken));
+            return KingdomActions.Feedback.error(KingdomError.NO_ITEMS);
+        }
+        long day = TreasuryActions.day(server);
+        Outcome paid = economy.purseToAccount(till, player.getUUID(), total, day);
+        if (!paid.ok()) {
+            GoodsStacks.give(player, new ItemStack(item, taken));
+            return KingdomActions.Feedback.error(paid.error());
+        }
+        String id = GoodsStacks.itemId(item);
+        if (offer.get().goods()) {
+            shop.addGoods(id, Shops.categoryOf(server, item), count, offer.get().unit() * ShopPricing.MILLI);
+        } else {
+            shop.addInput(id, count, offer.get().unit() * ShopPricing.MILLI);
+        }
+        if (shop.status() == Business.Status.EMPTY) {
+            shop.setStatus(shop.family() ? Business.Status.FAMILY : Business.Status.TRADING);
+        }
+        shop.record(day, new Business.Day(0, 0, total, 0, null));
+        CommerceSavedData.get(server).setDirty();
+        LawWork.traded(server, kingdom, player.getUUID(), total);
+        return KingdomActions.Feedback.ok(KEY + "sold", count, new ItemStack(item).getHoverName(),
+                MoneyTexts.amount(total, Purses.units(server, kingdom)));
+    }
+
+    // ---------------------------------------------------------------- fixing the trade
+
+    /**
+     * A member with the right over citizens fixes the trade of the place of a shop, or lets it choose again with an empty trade.
+     * The shop takes up a new trade once it sold off what it holds.
+     */
+    public static void pin(ServerPlayer player, long shopId, String trade) {
+        MinecraftServer server = player.server;
+        Optional<Business> found = CommerceSavedData.get(server).shop(shopId);
+        if (found.isEmpty()) {
+            KingdomActions.reply(player, KingdomActions.Feedback.fail(KEY + "gone"));
+            return;
+        }
+        Business shop = found.get();
+        KingdomActions.reply(player, fix(player, shop, trade));
+        open(player, shop, false);
+    }
+
+    static KingdomActions.Feedback fix(ServerPlayer player, Business shop, String trade) {
+        MinecraftServer server = player.server;
+        if (KingdomWorldApi.isReadOnly(server)) {
+            return KingdomActions.Feedback.error(KingdomError.READ_ONLY);
+        }
+        if (!KingdomWorldApi.state(server).membership().hasPermission(player.getUUID(), shop.kingdomId(), Permission.MANAGE_CITIZENS)) {
+            return KingdomActions.Feedback.error(KingdomError.NO_PERMISSION);
+        }
+        if (!near(player, shop)) {
+            return KingdomActions.Feedback.fail(KEY + "too_far");
+        }
+        if (trade.isEmpty()) {
+            shop.setPinned("");
+            CommerceSavedData.get(server).setDirty();
+            return KingdomActions.Feedback.ok(KEY + "unpinned");
+        }
+        Optional<Trade> chosen = TradeRegistry.current().get(trade);
+        if (chosen.isEmpty() || !fixable(server, shop, chosen.get(), PlaceSurvey.stations(server, shop.place().key()).orElse(Set.of()))) {
+            return KingdomActions.Feedback.fail(KEY + "pin_unfit");
+        }
+        shop.setPinned(trade);
+        shop.setNextTrade(trade);
+        if (!shop.nextTrade().isEmpty() && shop.goods().isEmpty() && Shops.returnInputs(server, shop)) {
+            shop.changeTrade(trade, TreasuryActions.day(server));
+        }
+        CommerceSavedData.get(server).setDirty();
+        return KingdomActions.Feedback.ok(KEY + "pinned", Component.translatable("kingdomworld.business.trade." + trade));
     }
 
     /**

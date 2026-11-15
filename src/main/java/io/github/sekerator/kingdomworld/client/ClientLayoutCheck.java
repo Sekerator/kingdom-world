@@ -831,10 +831,21 @@ final class ClientLayoutCheck {
      * The window of a city with the largest numbers and more shops than fit.
      */
     private static io.github.sekerator.kingdomworld.common.network.data.CityViews.CityDetail cityDetail(UUID kingdom, boolean canManage) {
+        return cityDetail(kingdom, canManage, false);
+    }
+
+    /**
+     * The window of a city, its shops resellers, or workshops and trading houses of every trade with the largest numbers.
+     */
+    private static io.github.sekerator.kingdomworld.common.network.data.CityViews.CityDetail cityDetail(UUID kingdom, boolean canManage,
+                                                                                                   boolean trades) {
         List<io.github.sekerator.kingdomworld.common.network.data.CityViews.ShopRow> shops = new ArrayList<>();
+        String[] crafts = {"toolmaker", "bakery", "cookshop", "carpenter", "tailor", "mason", "glazier", "trader"};
         for (int i = 0; i < 20; i++) {
-            shops.add(new io.github.sekerator.kingdomworld.common.network.data.CityViews.ShopRow(i, "general_store", i % 3 == 0 ? ""
-                    : LONG_PLAYER + ", " + LONG_PLAYER, i % 2 == 0 ? "trading" : "closing", MUCH, 500, MUCH));
+            String trade = trades ? crafts[i % crafts.length] : "general_store";
+            shops.add(new io.github.sekerator.kingdomworld.common.network.data.CityViews.ShopRow(i, trade, i % 3 == 0 ? ""
+                    : LONG_PLAYER + ", " + LONG_PLAYER, i % 2 == 0 ? "trading" : "closing", MUCH, 500, MUCH, trades && i % 2 == 0,
+                    trades ? MUCH : 0, trades && trade.equals("trader") ? MUCH : 0));
         }
         long[] lines = new long[io.github.sekerator.kingdomworld.core.economy.CityStatement.LINES];
         java.util.Arrays.fill(lines, 999_999);
@@ -846,12 +857,16 @@ final class ClientLayoutCheck {
     }
 
     private static ThroneScreen cities(KingdomView view, boolean canManage, boolean crown, boolean editing, boolean panel) {
+        return cities(view, canManage, crown, editing, panel, false);
+    }
+
+    private static ThroneScreen cities(KingdomView view, boolean canManage, boolean crown, boolean editing, boolean panel, boolean trades) {
         ThroneScreen screen = throne(view, "treasury", Component.empty());
         screen.updateTreasury(treasuryView(view.id(), canManage, view.viewerRole() == Role.KING, false));
         screen.showTreasury("cities", "today");
         screen.showCities(crown, editing, panel ? "999999g99s9c" : "");
         if (panel) {
-            screen.updateCityDetail(cityDetail(view.id(), canManage));
+            screen.updateCityDetail(cityDetail(view.id(), canManage, trades));
         }
         return screen;
     }
@@ -860,18 +875,44 @@ final class ClientLayoutCheck {
      * A shop with long names, the largest numbers and more goods than fit.
      */
     private static io.github.sekerator.kingdomworld.common.network.data.ShopView shopView(boolean canBuy) {
+        return shopView(canBuy, false);
+    }
+
+    /**
+     * A shop with long names, the largest numbers and more goods than fit; a workshop of the longest trade with every workstation,
+     * a trade fixed and another to come, goods made by citizens and more items to sell than fit.
+     */
+    private static io.github.sekerator.kingdomworld.common.network.data.ShopView shopView(boolean canBuy, boolean workshop) {
         List<io.github.sekerator.kingdomworld.common.network.data.ShopView.Row> rows = new ArrayList<>();
         for (int i = 0; i < 40; i++) {
             rows.add(new io.github.sekerator.kingdomworld.common.network.data.ShopView.Row(i % 5 == 0 ? longNamed(Items.NETHERITE_SWORD) : tradeItem(i),
-                    999_999_999L, MUCH, MUCH / 10));
+                    999_999_999L, MUCH, MUCH / 10, "row" + i, workshop && i % 2 == 0));
         }
+        if (!workshop) {
+            return new io.github.sekerator.kingdomworld.common.network.data.ShopView(7, UUID.randomUUID(), LONG_KINGDOM, LONG_CURRENCY, 10, 100,
+                    "general_store", LONG_PLAYER + ", " + LONG_PLAYER, "closing", rows, 0, 200, 500, 250, MUCH, MUCH, canBuy,
+                    canBuy ? "" : "kingdomworld.screen.shop.strangers");
+        }
+        List<io.github.sekerator.kingdomworld.common.network.data.ShopView.SellRow> sell = new ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            sell.add(new io.github.sekerator.kingdomworld.common.network.data.ShopView.SellRow(i % 5 == 0 ? longNamed(Items.NETHERITE_INGOT)
+                    : tradeItem(i), MUCH, i % 3 == 0 ? 0 : 999_999_999L, i % 4 == 0 ? 0 : 999_999_999L, 2304));
+        }
+        io.github.sekerator.kingdomworld.common.network.data.ShopView.Workshop place = new io.github.sekerator.kingdomworld.common.network.data
+                .ShopView.Workshop(List.of("crafting_table", "furnace", "smithing_table", "stonecutter", "smoker", "campfire", "loom", "blast_furnace"),
+                true, "toolmaker", "glazier", List.of("general_store", "toolmaker", "bakery", "cookshop", "carpenter", "tailor", "mason", "glazier",
+                "trader"), true);
         return new io.github.sekerator.kingdomworld.common.network.data.ShopView(7, UUID.randomUUID(), LONG_KINGDOM, LONG_CURRENCY, 10, 100,
-                "general_store", LONG_PLAYER + ", " + LONG_PLAYER, "closing", rows, 0, 200, 500, 250, MUCH, MUCH, canBuy,
-                canBuy ? "" : "kingdomworld.screen.shop.strangers");
+                "toolmaker", LONG_PLAYER + ", " + LONG_PLAYER, "trading", rows, 0, 200, 500, 250, MUCH, MUCH, canBuy, "", place, sell);
     }
 
     private static io.github.sekerator.kingdomworld.client.screen.ShopScreen shop(boolean canBuy, String tab) {
-        io.github.sekerator.kingdomworld.client.screen.ShopScreen screen = new io.github.sekerator.kingdomworld.client.screen.ShopScreen(shopView(canBuy));
+        return shop(canBuy, tab, false);
+    }
+
+    private static io.github.sekerator.kingdomworld.client.screen.ShopScreen shop(boolean canBuy, String tab, boolean workshop) {
+        io.github.sekerator.kingdomworld.client.screen.ShopScreen screen = new io.github.sekerator.kingdomworld.client.screen.ShopScreen(
+                shopView(canBuy, workshop));
         screen.showForCheck(tab, false, "9999");
         return screen;
     }
@@ -1525,6 +1566,11 @@ final class ClientLayoutCheck {
         cases.add(new Case("shop-buy", () -> shop(true, "buy")));
         cases.add(new Case("shop-buy-refused", () -> shop(false, "buy")));
         cases.add(new Case("shop-about", () -> shop(true, "about")));
+        cases.add(new Case("shop-sell", () -> shop(true, "sell", true)));
+        cases.add(new Case("shop-buy-made", () -> shop(true, "buy", true)));
+        cases.add(new Case("shop-about-trade", () -> shop(true, "about", true)));
+        cases.add(new Case("treasury-city-panel-trades", () -> cities(view(KingdomView.Relation.MEMBER, Role.KING), true, false, false, true,
+                true)));
         cases.add(new Case("market-sell-citizens", () -> market(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "settings", false, null,
                 Component.empty())));
         cases.add(new Case("throne-treasury-journal", () -> treasury(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "journal", "week",

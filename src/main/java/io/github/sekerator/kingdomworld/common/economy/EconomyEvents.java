@@ -91,6 +91,7 @@ public final class EconomyEvents {
         Households.reset();
         ItemPrices.invalidate();
         io.github.sekerator.kingdomworld.common.commerce.CityEconomySettings.reset();
+        io.github.sekerator.kingdomworld.common.commerce.CraftSettings.reset();
         io.github.sekerator.kingdomworld.common.commerce.CommerceWork.reset();
     }
 
@@ -102,6 +103,7 @@ public final class EconomyEvents {
     }
 
     private static void onReload(AddReloadListenerEvent event) {
+        event.addListener(new io.github.sekerator.kingdomworld.common.commerce.TradeLoader());
         event.addListener((net.minecraft.server.packs.resources.ResourceManagerReloadListener) manager -> {
             ItemPrices.invalidate();
             io.github.sekerator.kingdomworld.common.trade.MarketActions.invalidate();
@@ -127,6 +129,7 @@ public final class EconomyEvents {
         MinecraftServer server = event.getServer();
         EconomySettings.refresh();
         io.github.sekerator.kingdomworld.common.commerce.CityEconomySettings.refresh();
+        io.github.sekerator.kingdomworld.common.commerce.CraftSettings.refresh();
         EconomyRules rules = EconomySettings.rules();
         KingdomWorldState state = KingdomWorldApi.state(server);
         state.economy().setDefaults(rules.units(), rules.defaultPollTax());

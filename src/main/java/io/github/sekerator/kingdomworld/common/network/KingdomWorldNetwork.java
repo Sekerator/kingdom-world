@@ -57,7 +57,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "64";
+    public static final String PROTOCOL_VERSION = "66";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -374,6 +374,10 @@ public final class KingdomWorldNetwork {
                 io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopTrade::encode,
                 io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopTrade::decode,
                 io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopTrade::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopPin.class, NetworkDirection.PLAY_TO_SERVER,
+                io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopPin::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopPin::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopPin::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

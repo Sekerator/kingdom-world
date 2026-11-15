@@ -1,0 +1,13 @@
+{
+  "kind": "craft",
+  "goods": [
+    "food"
+  ],
+  "stations": [
+    [
+      "smoker",
+      "campfire"
+    ]
+  ],
+  "profession": "cook"
+}

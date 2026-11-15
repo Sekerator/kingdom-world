@@ -22,6 +22,8 @@ public final class Stations {
     public static final String GUILD_DESK = "guild_desk";
     /** The magic focus of the mage, the heart of the mage tower. */
     public static final String MAGIC_FOCUS = "magic_focus";
+    /** A loom: only the mark of the place of a tailor among the citizens; no post of the crown needs one, so it is not in {@link #ALL}. */
+    public static final String LOOM = "loom";
 
     /** Every kind, in the order the post screen lists them. */
     public static final List<String> ALL = List.of(FURNACE, BLAST_FURNACE, SMOKER, CAMPFIRE, CRAFTING_TABLE, STONECUTTER, SMITHING_TABLE, MINT,

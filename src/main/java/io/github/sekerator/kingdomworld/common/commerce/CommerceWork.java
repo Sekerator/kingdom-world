@@ -369,8 +369,7 @@ public final class CommerceWork {
             return true;
         }
         if (job.city() < 0) {
-            Shops.restock(server, job.kingdom(), job.day());
-            return true;
+            return Shops.restock(server, job.kingdom(), job.day(), start);
         }
         CityTreasury treasury = economy.openCityTreasury(job.kingdom(), job.city());
         if (treasury.lastDay() >= job.day()) {

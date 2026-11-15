@@ -1,0 +1,24 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:planks",
+    "#minecraft:wooden_slabs",
+    "#minecraft:wooden_stairs",
+    "#minecraft:wooden_doors",
+    "#minecraft:wooden_fences",
+    "minecraft:ladder",
+    "minecraft:stone_bricks",
+    "minecraft:stone_brick_slab",
+    "minecraft:stone_brick_stairs",
+    "minecraft:stone_slab",
+    "minecraft:stone_stairs",
+    "minecraft:cobblestone_slab",
+    "minecraft:cobblestone_stairs",
+    "minecraft:bricks",
+    "minecraft:brick",
+    "minecraft:brick_slab",
+    "minecraft:brick_stairs",
+    "minecraft:glass",
+    "minecraft:glass_pane"
+  ]
+}

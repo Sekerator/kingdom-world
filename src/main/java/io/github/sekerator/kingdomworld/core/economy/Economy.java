@@ -1855,6 +1855,55 @@ public final class Economy {
     }
 
     /**
+     * Money of a purse goes onto the account of a player in the currency of its kingdom: a shop of citizens pays a player for what
+     * it bought. As all income of a player, it pays back what the player owes the treasury first.
+     */
+    public Outcome purseToAccount(CityPurses.PurseKey key, UUID player, long amount, long day) {
+        if (!treasuries.containsKey(key.kingdom())) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!Money.isAmount(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (amount == 0) {
+            return Outcome.DONE;
+        }
+        if (purses.balance(key) < amount) {
+            return Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
+        }
+        if (!accounts.canCredit(player, key.kingdom(), amount)) {
+            return Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+        }
+        debit(key, amount, CityLedger.PURCHASES, day);
+        accounts.credit(player, key.kingdom(), amount);
+        repayFromIncome(player, key.kingdom(), amount, day);
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * Money comes from abroad into a purse: what a trading house of citizens got for the goods citizens made that it exported. It
+     * is new money of the currency, as the income of the merchants of the crown is.
+     */
+    public Outcome purseFromAbroad(CityPurses.PurseKey key, long amount, long day) {
+        if (!treasuries.containsKey(key.kingdom())) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!Money.isAmount(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (amount == 0) {
+            return Outcome.DONE;
+        }
+        if (!purses.canReceive(key, amount)) {
+            return Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+        }
+        credit(key, amount, CityLedger.OTHER, day);
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
      * Money of a purse leaves the world: goods from afar, the upkeep of a shop, goods a city bought abroad, a purse too full.
      *
      * @param city the city it is counted for; for a purse or a treasury of a city its own is taken

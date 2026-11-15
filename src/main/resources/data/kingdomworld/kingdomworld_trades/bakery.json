@@ -1,0 +1,15 @@
+{
+  "kind": "craft",
+  "goods": [
+    "food"
+  ],
+  "stations": [
+    [
+      "crafting_table"
+    ],
+    [
+      "furnace"
+    ]
+  ],
+  "profession": "cook"
+}

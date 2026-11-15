@@ -1,0 +1,11 @@
+{
+  "kind": "resale",
+  "goods": [
+    "food",
+    "clothing",
+    "tools",
+    "household",
+    "luxury",
+    "materials"
+  ]
+}

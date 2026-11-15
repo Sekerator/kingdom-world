@@ -13,6 +13,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.CraftingTableBlock;
 import net.minecraft.world.level.block.FletchingTableBlock;
+import net.minecraft.world.level.block.LoomBlock;
 import net.minecraft.world.level.block.SmithingTableBlock;
 import net.minecraft.world.level.block.StonecutterBlock;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
@@ -53,6 +54,10 @@ public final class Workstations {
         if (block instanceof FletchingTableBlock) {
             return null;
         }
+        if (block instanceof LoomBlock) {
+            // Only the place of a tailor among the citizens asks for a loom; posts never look at it (see mayBeStation).
+            return Stations.LOOM;
+        }
         if (block instanceof CraftingTableBlock) {
             return Stations.CRAFTING_TABLE;
         }
@@ -85,6 +90,13 @@ public final class Workstations {
         Block block = state.getBlock();
         return block instanceof CraftingTableBlock || block instanceof StonecutterBlock || block instanceof CampfireBlock
                 || state.hasBlockEntity();
+    }
+
+    /**
+     * Whether a block may be a workstation of a place of the shops of citizens, a loom included; a quick test for scanning.
+     */
+    public static boolean mayBePlaceStation(BlockState state) {
+        return mayBeStation(state) || state.getBlock() instanceof LoomBlock;
     }
 
     /**
