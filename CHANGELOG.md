@@ -2,6 +2,16 @@
 
 ## Русский
 
+### 1.6.1
+
+Лесорубы снова рубят лес с земли, а работники опасной работы оставляют добычу игроков на складах.
+
+- **Исправлено: лесорубы на кронах.** Лесоруб шёл не к стволу, а на верхушку дерева: игра поднимает путь к бревну до верха блоков над ним, а листва держит тело. Если на крону можно было зайти (склон, бугор, соседняя крона, ботинки, которые поднимают шаг), лесоруб стоял на ней, смотрел вниз и не рубил, а потом шёл на следующую верхушку. Теперь работник подходит к месту на земле рядом с тем, над чем работает, откуда до него достаёт, и никогда не встаёт на листву. Лесоруб рубит с 4 блоков, так что дуб с низкой кроной рубится с земли.
+- **Дерево без пути.** Дерево, к которому нет пути, лесоруб оставляет на полдня и идёт к следующему, а не возвращается к нему снова и снова, даже если начал его рубить. Лесоруб, который уже застрял на кроне, сначала спускается на землю.
+- **Носильщики и сдача добычи.** Носильщик и работник, который несёт добычу в контейнер поста или на склад, тоже идут к месту на земле рядом с ним.
+- **Тела не на кронах.** Тело жителя больше не появляется на листве по последнему месту и не уходит гулять по кронам.
+- **Простая броня для опасной работы.** Лесоруб, шахтёр, рыбак и пастух по-прежнему надевают броню со складов, но только простую: без чар, без своего имени, без особых свойств других модов (например, аффиксов Apotheosis) и без других данных, кроме износа. Такая добыча игроков остаётся на складе для них. Уже надетую такую броню работник при следующей подготовке к работе сдаёт на склад и надевает простую, если она есть. Справочник (глава «Работа», «Инструменты и броня») рассказывает об этом.
+
 ### 1.6.0
 
 Города королевства игроков растут каждый сам и строятся сами под главой (мэром из жителя или бароном) и держат свои казны. Жители держат лавки и мастерские своих ремёсел, торговые дома вывозят сделанное ими, а корона закупает у них, чего не делают её мастерские. Большие города живут народом числом, который работает на казённых постах и в мастерских, так что сервер держит города на тысячи и миллионы человек. Столица достраивает дальние стройки и стены без игроков, дороги идут ровно, с выемками, насыпями и тоннелями, а королевства мира держат лавки и берут десятину. Сетевой протокол 69: клиент и сервер должны быть одной версии мода. Сохранения читаются как есть.
@@ -301,6 +311,16 @@
 - **Нагрузка и баланс.** Замер нагрузки `admin perf`, тяжёлые места разнесены по тикам, жалование всех профессий по умолчанию.
 
 ## English
+
+### 1.6.1
+
+Lumberjacks fell trees from the ground again, and the workers of dangerous work leave the spoils of players in the storehouses.
+
+- **Fixed: lumberjacks on crowns.** A lumberjack walked to the top of a tree instead of its trunk: the game takes a walk to a log up to the top of the blocks over it, and leaves bear a body. Where a crown could be walked onto (a slope, a hump, a neighbouring crown, boots that lift the step), the lumberjack stood on it looking down and did not fell it, then went on to the next treetop. Now a worker walks to a place on the ground beside what it works at, from which it reaches it, and never stands on leaves. A lumberjack fells from 4 blocks, so an oak whose crown hangs low is felled from the ground.
+- **A tree without a way.** A lumberjack leaves a tree it finds no way to for half a day and goes on to the next one instead of coming back to it again and again, even when it began to fell it. A lumberjack already caught on a crown first gets down to the ground.
+- **Carriers and delivering.** A carrier, and a worker bringing what it gathered to the container of its post or to a storehouse, walk to a place on the ground beside it too.
+- **Bodies not on crowns.** The body of a citizen no longer appears on leaves where it was last, nor strolls about on crowns.
+- **Plain armor for dangerous work.** Lumberjacks, miners, fishers and herders still put on armor from the storehouses, but plain armor only: no enchantments, no name of its own, no special properties of other mods (such as the affixes of Apotheosis) and no data beyond its wear. Such spoils of players stay in the storehouses for them. A worker that already wears such armor hands it in when it next gets ready for work and puts on plain armor if there is any. The guide (chapter "Work", "Tools and armor") tells about it.
 
 ### 1.6.0
 
