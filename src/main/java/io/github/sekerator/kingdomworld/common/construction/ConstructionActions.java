@@ -549,7 +549,8 @@ public final class ConstructionActions {
             return KingdomActions.Feedback.error(KingdomError.NO_PERMISSION);
         }
         Optional<BuildingTemplate> template = BuildingTemplates.get(templateId)
-                .filter(found -> found.owner() == null || found.owner().equals(kingdomId));
+                .filter(found -> found.owner() == null || found.owner().equals(kingdomId))
+                .filter(found -> !CustomTemplates.retired(state.construction(), templateId));
         if (template.isEmpty()) {
             return KingdomActions.Feedback.error(KingdomError.UNKNOWN_TEMPLATE);
         }
@@ -683,7 +684,9 @@ public final class ConstructionActions {
             error = KingdomError.NO_PERMISSION;
         } else if (template.isEmpty()) {
             error = KingdomError.UNKNOWN_TEMPLATE;
-        } else if (template.get().owner() != null && !template.get().owner().equals(kingdom.get().id())) {
+        } else if (template.get().owner() != null && (!template.get().owner().equals(kingdom.get().id())
+                || CustomTemplates.retired(state.construction(), templateId))) {
+            // Another kingdom's blueprint, or one deleted and kept only for the buildings on it.
             error = KingdomError.UNKNOWN_TEMPLATE;
         } else if ((problem = BuildingTemplates.problem(template.get(), ConstructionSettings.rules())) == null) {
             BuildingTemplate built = TemplateMaterials.apply(template.get(),

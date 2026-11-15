@@ -1598,7 +1598,9 @@ public final class KingdomWorldState {
     }
 
     /**
-     * Deletes a saved blueprint; not while a construction is built from it. Buildings built from it keep their role.
+     * Deletes a saved blueprint; not while a construction is built from it. Buildings built from it keep their role and their
+     * template: while one stands, the blueprint is only hidden from the kingdom, which builds nothing new from it, and the
+     * buildings can still be repaired, upgraded and taken down.
      */
     public Outcome deleteBlueprint(UUID actor, UUID kingdomId, long id) {
         KingdomError problem = blueprintProblem(actor, kingdomId, id);
@@ -1607,11 +1609,15 @@ public final class KingdomWorldState {
         }
         String template = construction.blueprint(id).orElseThrow().templateId();
         for (Construction under : construction.all()) {
-            if (under.templateId().equals(template)) {
+            if (under.templateId().equals(template) && under.kind() == Construction.Kind.BUILD) {
                 return Outcome.fail(KingdomError.BLUEPRINT_IN_USE);
             }
         }
-        construction.removeBlueprint(id);
+        if (construction.blueprintInUse(id)) {
+            construction.retire(id);
+        } else {
+            construction.removeBlueprint(id);
+        }
         return Outcome.DONE;
     }
 

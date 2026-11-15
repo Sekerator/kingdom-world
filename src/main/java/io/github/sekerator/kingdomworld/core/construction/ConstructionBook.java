@@ -20,6 +20,11 @@ public final class ConstructionBook {
     private final Map<Long, Construction> constructions = new LinkedHashMap<>();
     private final Map<Long, Building> buildings = new LinkedHashMap<>();
     private final Map<Long, CustomBlueprint> blueprints = new LinkedHashMap<>();
+    /**
+     * Blueprints their kingdom deleted while buildings stood on them: hidden from the kingdom, kept as the templates of those
+     * buildings (to repair, upgrade and take them down) until the last of them goes.
+     */
+    private final java.util.Set<Long> retired = new java.util.LinkedHashSet<>();
     private long nextConstruction = 1;
     private long nextBuilding = 1;
     private long nextBlueprint = 1;
@@ -133,6 +138,9 @@ public final class ConstructionBook {
             version++;
         }
         changed();
+        if (!retired.isEmpty()) {
+            forgetRetired();
+        }
         return Optional.of(removed);
     }
 
@@ -436,6 +444,7 @@ public final class ConstructionBook {
         if (removed != null) {
             version++;
             changed();
+            forgetRetired();
         }
         return Optional.ofNullable(removed);
     }
@@ -561,6 +570,7 @@ public final class ConstructionBook {
             version++;
         }
         boolean any = !removed.isEmpty() | anyBuilding;
+        retired.removeIf(id -> blueprints.get(id) != null && blueprints.get(id).kingdomId().equals(kingdomId));
         if (blueprints.values().removeIf(blueprint -> blueprint.kingdomId().equals(kingdomId))) {
             any = true;
             blueprintRevision++;
@@ -615,22 +625,104 @@ public final class ConstructionBook {
 
     // ---------------------------------------------------------------- saved blueprints
 
+    /**
+     * A saved blueprint its kingdom has, not one it deleted (see {@link #retire}).
+     */
     public Optional<CustomBlueprint> blueprint(long id) {
-        return Optional.ofNullable(blueprints.get(id));
+        return retired.contains(id) ? Optional.empty() : Optional.ofNullable(blueprints.get(id));
     }
 
+    /**
+     * Every saved blueprint, those deleted but kept for their buildings too: the templates of the buildings.
+     */
     public Collection<CustomBlueprint> blueprints() {
         return List.copyOf(blueprints.values());
     }
 
+    /**
+     * The blueprints a kingdom has, not those it deleted.
+     */
     public List<CustomBlueprint> blueprintsOf(UUID kingdomId) {
         List<CustomBlueprint> result = new ArrayList<>();
         for (CustomBlueprint blueprint : blueprints.values()) {
-            if (blueprint.kingdomId().equals(kingdomId)) {
+            if (blueprint.kingdomId().equals(kingdomId) && !retired.contains(blueprint.id())) {
                 result.add(blueprint);
             }
         }
         return result;
+    }
+
+    /**
+     * Whether a blueprint was deleted by its kingdom and is kept only for the buildings standing on it.
+     */
+    public boolean isRetired(long id) {
+        return retired.contains(id);
+    }
+
+    /**
+     * The numbers of the blueprints deleted but kept for their buildings, for saving.
+     */
+    public long[] retiredBlueprints() {
+        return retired.stream().mapToLong(Long::longValue).toArray();
+    }
+
+    /**
+     * Whether a building or a construction stands on the template of a blueprint.
+     */
+    public boolean blueprintInUse(long id) {
+        CustomBlueprint blueprint = blueprints.get(id);
+        if (blueprint == null) {
+            return false;
+        }
+        String template = blueprint.templateId();
+        for (Building building : buildings.values()) {
+            if (building.templateId().equals(template)) {
+                return true;
+            }
+        }
+        for (Construction construction : constructions.values()) {
+            if (construction.templateId().equals(template)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Deletes a blueprint for its kingdom while buildings stand on it: the kingdom no longer sees it and builds nothing new
+     * from it, and it is kept as their template until the last of them goes.
+     */
+    public void retire(long id) {
+        if (blueprints.containsKey(id) && retired.add(id)) {
+            blueprintRevision++;
+            changed();
+        }
+    }
+
+    /**
+     * Forgets the blueprints deleted whose last building went.
+     */
+    private void forgetRetired() {
+        for (java.util.Iterator<Long> it = retired.iterator(); it.hasNext(); ) {
+            long id = it.next();
+            if (!blueprintInUse(id)) {
+                it.remove();
+                blueprints.remove(id);
+                blueprintRevision++;
+            }
+        }
+    }
+
+    /**
+     * Puts back the blueprints deleted but kept for their buildings, read from saved data; those no longer used go.
+     */
+    public void restoreRetired(long[] ids) {
+        for (long id : ids) {
+            if (blueprints.containsKey(id)) {
+                retired.add(id);
+            }
+        }
+        forgetRetired();
     }
 
     public long nextBlueprintId() {
@@ -668,6 +760,7 @@ public final class ConstructionBook {
     }
 
     public Optional<CustomBlueprint> removeBlueprint(long id) {
+        retired.remove(id);
         CustomBlueprint removed = blueprints.remove(id);
         if (removed != null) {
             blueprintRevision++;

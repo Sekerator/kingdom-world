@@ -74,6 +74,7 @@ public final class ConstructionNbt {
             blueprints.add(write(blueprint));
         }
         tag.put("blueprints", blueprints);
+        tag.putLongArray("retiredBlueprints", book.retiredBlueprints());
         ListTag left = new ListTag();
         book.leftScaffolds().forEach((dimension, cells) -> {
             CompoundTag entry = new CompoundTag();
@@ -408,6 +409,7 @@ public final class ConstructionNbt {
                 problems.add("blueprint #" + i + ": " + e.getMessage());
             }
         }
+        book.restoreRetired(tag.getLongArray("retiredBlueprints"));
         ListTag left = tag.getList("leftScaffolds", Tag.TAG_COMPOUND);
         for (int i = 0; i < left.size(); i++) {
             CompoundTag entry = left.getCompound(i);

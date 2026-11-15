@@ -178,4 +178,39 @@ class BuildingWorkTest {
         assertTrue(book.blueprintRevision() > revision);
         assertTrue(book.blueprintsOf(kingdom).isEmpty());
     }
+
+    @Test
+    void aBlueprintDeletedUnderABuildingStaysItsTemplateUntilTheBuildingGoes() {
+        UUID kingdom = UUID.randomUUID();
+        int[] blocks = new int[2 * 2 * 2];
+        java.util.Arrays.fill(blocks, 0);
+        ConstructionBook book = new ConstructionBook();
+        CustomBlueprint blueprint = book.addBlueprint(new CustomBlueprint(1, kingdom, "Shed", "housing", "", 2, 2, 2,
+                List.of("minecraft:oak_planks"), blocks, 0, 0, 0, Facing.SOUTH, 1L, kingdom));
+        book.putBuilding(new Building(5, kingdom, blueprint.templateId(), "shed", "housing", "", 1, Materials.NONE,
+                new WorldPos("minecraft:overworld", 0, 64, 0), Placement.NONE, new Box(0, 64, 0, 1, 65, 1), 7L, 100L, false, 100, 100L,
+                false, new BitSet()));
+        assertTrue(book.blueprintInUse(1));
+        int revision = book.blueprintRevision();
+        book.retire(1);
+        assertTrue(book.blueprintRevision() > revision, "the templates are made again");
+        assertTrue(book.isRetired(1));
+        assertTrue(book.blueprintsOf(kingdom).isEmpty(), "the kingdom no longer sees it");
+        assertTrue(book.blueprint(1).isEmpty(), "nobody renames or deletes it again");
+        assertEquals(1, book.blueprints().size(), "it is still the template of the building");
+        // Saved and read again, it stays so.
+        ConstructionBook read = new ConstructionBook();
+        read.restore(blueprint);
+        read.putBuilding(book.building(5).orElseThrow());
+        read.restoreRetired(book.retiredBlueprints());
+        assertTrue(read.isRetired(1) && read.blueprints().size() == 1);
+        // The building goes: so does the blueprint.
+        book.removeBuilding(5);
+        assertTrue(book.blueprints().isEmpty() && !book.isRetired(1), "the blueprint outlived its last building");
+        // Read again with no building on it, it goes at once.
+        ConstructionBook empty = new ConstructionBook();
+        empty.restore(blueprint);
+        empty.restoreRetired(new long[]{1});
+        assertTrue(empty.blueprints().isEmpty());
+    }
 }

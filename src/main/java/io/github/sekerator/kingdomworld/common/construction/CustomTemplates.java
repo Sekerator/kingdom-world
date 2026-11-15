@@ -66,12 +66,22 @@ public final class CustomTemplates {
      */
     public static List<BuildingTemplate> of(UUID kingdomId) {
         List<BuildingTemplate> result = new ArrayList<>();
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        ConstructionBook book = server == null ? null : KingdomWorldApi.state(server).construction();
         for (BuildingTemplate template : current().values()) {
-            if (kingdomId.equals(template.owner())) {
+            // A blueprint the kingdom deleted is kept only for the buildings on it: nothing new is built from it.
+            if (kingdomId.equals(template.owner()) && (book == null || !retired(book, template.id().toString()))) {
                 result.add(template);
             }
         }
         return result;
+    }
+
+    /**
+     * Whether the template of a blueprint is one its kingdom deleted and keeps only for the buildings on it.
+     */
+    public static boolean retired(ConstructionBook book, String templateId) {
+        return CustomBlueprint.number(templateId).stream().anyMatch(book::isRetired);
     }
 
     private static Map<String, BuildingTemplate> current() {

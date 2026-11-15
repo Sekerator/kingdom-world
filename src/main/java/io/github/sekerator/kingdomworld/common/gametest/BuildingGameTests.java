@@ -533,6 +533,22 @@ public final class BuildingGameTests {
             Building built = build(helper, kingdom, template, new BlockPos(9, 0, 9));
             helper.assertTrue(BuildingRoles.HOUSE.equals(built.role()), "The house of the blueprint has no role");
             helper.assertTrue(BuildingEffects.of(server, built).orElseThrow().beds() == 1, "The bed of the blueprint is not a home");
+            // Deleted with the house standing on it: the kingdom no longer sees it, the house keeps its template.
+            helper.assertTrue(KingdomWorldApi.change(server, "test", state -> state.deleteBlueprint(null, kingdom.id(), blueprint.id())).ok(),
+                    "The blueprint was not deleted");
+            helper.assertTrue(KingdomWorldApi.state(server).construction().blueprintsOf(kingdom.id()).isEmpty()
+                    && CustomTemplates.of(kingdom.id()).isEmpty(), "The kingdom still sees the blueprint it deleted");
+            helper.assertTrue(BuildingWork.currentTemplate(built).isPresent(), "The house of a deleted blueprint lost its template");
+            KingdomSavedData kept = KingdomSavedData.load(KingdomSavedData.get(server).save(new CompoundTag()));
+            helper.assertTrue(kept.state().construction().isRetired(blueprint.id()) && kept.state().construction().blueprints().size()
+                    == KingdomWorldApi.state(server).construction().blueprints().size(), "The deleted blueprint was not kept in saving");
+            // The house can still be taken down; with it goes the blueprint.
+            KingdomWorldState.ConstructionChange demolition = BuildingWork.orderDemolition(server, null, kingdom.id(), built.id());
+            helper.assertTrue(demolition.outcome().ok(), "The house of a deleted blueprint cannot be taken down: " + demolition.outcome());
+            ConstructionWork.finishNow(server, demolition.construction().orElseThrow());
+            helper.assertTrue(KingdomWorldApi.state(server).construction().building(built.id()).isEmpty(), "The house still stands");
+            helper.assertTrue(CustomTemplates.get(blueprint.templateId()).isEmpty() && !KingdomWorldApi.state(server).construction()
+                    .isRetired(blueprint.id()), "The deleted blueprint outlived its last building");
         } finally {
             end(helper, kingdom, area[0], area[1]);
         }

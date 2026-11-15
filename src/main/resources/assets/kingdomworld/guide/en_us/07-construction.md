@@ -439,7 +439,9 @@ turns that entrance towards you.
 Saved blueprints are kept in the kingdom data of the world and show in the own view of the Construction tab: "Own
 blueprints: N of {cfg:construction.maxBlueprintsPerKingdom}". Click a blueprint to take it and build it (the wood and
 stone are chosen as for a template), to **Rename** it or to **Delete** it. A blueprint cannot be deleted while a
-construction is built from it. Buildings built from a deleted blueprint stay and keep their role.
+construction is built from it. Buildings built from a deleted blueprint stay and keep their role: the blueprint leaves the list and nothing new is built
+from it, but the server keeps it while one of those buildings stands, so they can still be repaired, upgraded and taken
+down.
 
 > Mark the corners so that nothing extra gets into the box: the ground under the floor and the trees next door become
 > part of the blueprint too.
