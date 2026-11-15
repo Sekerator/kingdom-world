@@ -187,7 +187,7 @@ final class WallEarthworks {
         UUID kingdom = wall.kingdomId();
         for (int y = Math.max(foot - 1, level.getMinBuildHeight()); y <= top; y++) {
             BlockState state = level.getBlockState(pos.setY(y));
-            if (!Trees.isLog(state) || Trees.isWorkedWood(state) || mine(wall, pos.asLong())) {
+            if (!Trees.isLog(state) || Trees.isWorkedWood(state) || anyWall(level.getServer(), wall, pos.asLong()) || !ours(level, wall, x, z)) {
                 continue;
             }
             BlockPos base = pos.immutable();
@@ -208,11 +208,14 @@ final class WallEarthworks {
                 continue;
             }
             for (BlockPos log : tree.logs()) {
-                remove(level, wall, log, level.getBlockState(log));
+                // A log of a wall leaning on the tree stays, whosever the wall.
+                if (!anyWall(level.getServer(), wall, log.asLong())) {
+                    remove(level, wall, log, level.getBlockState(log));
+                }
             }
             for (BlockPos leaf : tree.leaves()) {
                 BlockState leaves = level.getBlockState(leaf);
-                if (Trees.isNaturalLeaves(leaves)) {
+                if (Trees.isNaturalLeaves(leaves) && !anyWall(level.getServer(), wall, leaf.asLong())) {
                     remove(level, wall, leaf, leaves);
                 }
             }
@@ -227,6 +230,10 @@ final class WallEarthworks {
      * @param wallTop the top of the wall itself; above it only natural ground is cut, nothing is noted
      */
     private static void clear(ServerLevel level, Wall wall, int x, int z, int from, int to, int wallTop, Set<Long> pillars) {
+        if (!ours(level, wall, x, z)) {
+            // The land of another kingdom is not touched.
+            return;
+        }
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, from, z);
         for (int y = from; y <= to; y++) {
             BlockState state = level.getBlockState(pos.setY(y));
@@ -235,10 +242,11 @@ final class WallEarthworks {
                 continue;
             }
             long at = pos.asLong();
-            if (mine(wall, at) || otherWall(level.getServer(), wall, at)) {
+            if (mine(wall, at) || anyWall(level.getServer(), wall, at)) {
                 continue;
             }
-            if (natural(state) && !pillars.contains(at) && !ConstructionWork.isProtected(level, pos, state)) {
+            // A log is taken only as a part of a tree, felled whole: one standing alone or hanging over the air was put there.
+            if (natural(state) && !Trees.isLog(state) && !pillars.contains(at) && !ConstructionWork.isProtected(level, pos, state)) {
                 remove(level, wall, pos.immutable(), state);
             } else if (y <= wallTop) {
                 blocked(wall, x, y, z);
@@ -267,14 +275,18 @@ final class WallEarthworks {
      * @return whether it is filled; {@code false} if earth ran out
      */
     private static boolean fill(ServerLevel level, Wall wall, int x, int z, int from, int to) {
+        if (!ours(level, wall, x, z)) {
+            // Nothing is filled on the land of another kingdom.
+            return true;
+        }
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, from, z);
         for (int y = from; y <= to; y++) {
             BlockState state = level.getBlockState(pos.setY(y));
-            if (!loose(state)) {
+            if (!loose(state) || mine(wall, pos.asLong()) || anyWall(level.getServer(), wall, pos.asLong())) {
                 continue;
             }
             if (!state.isAir() && state.getFluidState().isEmpty() && !state.canBeReplaced()) {
-                if (!natural(state) || mine(wall, pos.asLong())) {
+                if (!natural(state) || Trees.isLog(state)) {
                     continue;
                 }
                 remove(level, wall, pos.immutable(), state);
@@ -396,16 +408,23 @@ final class WallEarthworks {
     }
 
     /**
-     * Whether a block belongs to another wall of the same kingdom.
+     * Whether a block belongs to another wall of the dimension, of whatever kingdom: placed by it or taken over by it.
      */
-    private static boolean otherWall(MinecraftServer server, Wall wall, long at) {
+    private static boolean anyWall(MinecraftServer server, Wall wall, long at) {
         for (Wall other : RoadWork.state(server).walls()) {
-            if (other != wall && other.kingdomId().equals(wall.kingdomId()) && other.dimension().equals(wall.dimension())
-                    && (other.placedHere(at) || other.replaces(at))) {
+            if (other != wall && other.dimension().equals(wall.dimension()) && (other.placedHere(at) || other.replaces(at))) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * Whether the earthworks of a wall may change a column: on the land of its own kingdom or of nobody.
+     */
+    private static boolean ours(ServerLevel level, Wall wall, int x, int z) {
+        UUID owner = KingdomWorldApi.ownerAt(level, new BlockPos(x, 0, z));
+        return owner == null || owner.equals(wall.kingdomId());
     }
 
     // ---------------------------------------------------------------- gates
@@ -429,7 +448,7 @@ final class WallEarthworks {
         int head = foot + wall.wallClass().height() + 1;
         for (int i = gate - Wall.GATE_HALF; i <= gate + Wall.GATE_HALF; i++) {
             RouteCell cell = wall.cells().get(Math.floorMod(i, size));
-            if (!ChunkHold.loaded(level, new BlockPos(cell.x(), 0, cell.z()))) {
+            if (!ChunkHold.loaded(level, new BlockPos(cell.x(), 0, cell.z())) || !ours(level, wall, cell.x(), cell.z())) {
                 continue;
             }
             int surface = io.github.sekerator.kingdomworld.common.construction.Earthworks.surface(level, cell.x(), cell.z()) - 1;
@@ -451,7 +470,7 @@ final class WallEarthworks {
         for (int k = 1; k <= RAMP; k++) {
             int cx = x + stepX * k;
             int cz = z + stepZ * k;
-            if (!ChunkHold.loaded(level, new BlockPos(cx, 0, cz)) || wall.cellAt(cx, cz) >= 0) {
+            if (!ChunkHold.loaded(level, new BlockPos(cx, 0, cz)) || wall.cellAt(cx, cz) >= 0 || !ours(level, wall, cx, cz)) {
                 return;
             }
             int surface = io.github.sekerator.kingdomworld.common.construction.Earthworks.surface(level, cx, cz) - 1;

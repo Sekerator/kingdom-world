@@ -221,6 +221,8 @@ the city and press **Actions**. The Construction right is needed.
 - Before a column goes up, its place is cleared: a tree whose trunk stands in the line of the wall falls whole, and
   leaves, grass, flowers, vines, saplings, snow and mushrooms in the line go. What is useful goes to the storehouses.
 - The wall breaks no block a player placed: it has a gap there, and the kingdom gets one message with the place.
+  Logs go only with their tree: a log standing alone or hanging over the air (a beam) stays. The clearing, the fill and
+  the ramps at gates touch neither the walls of other kingdoms nor the land of others.
 - A hole under the wall is always filled down to solid ground: first with what the wall dug itself, then with dirt,
   then with cobblestone and cobbled deepslate from the storehouses. Without earth a column waits, and the kingdom
   hears once a day that the wall needs earth. Walls of kingdoms of the world go up at once and are filled for free.

@@ -562,4 +562,58 @@ public final class WallGameTests {
         }
         helper.succeed();
     }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_walls_others", timeoutTicks = 200)
+    public static void aWallLeavesTheWallOfAnotherKingdomAndABeam(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        land(helper);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Wall Neighbours", UUID.randomUUID());
+        UUID other = UUID.randomUUID();
+        long[] otherWall = {0};
+        try {
+            StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 12);
+            store.insertItem(0, new ItemStack(Items.SPRUCE_LOG, 64), false);
+            store.insertItem(1, new ItemStack(Items.SPRUCE_LOG, 64), false);
+            // Two logs of a palisade of another kingdom stand in the line of the wall, on its north side.
+            BlockPos palisade = helper.absolutePos(new BlockPos(6, 1, 2));
+            level.setBlockAndUpdate(palisade, Blocks.OAK_LOG.defaultBlockState());
+            level.setBlockAndUpdate(palisade.above(), Blocks.OAK_LOG.defaultBlockState());
+            // A beam of a player hangs over the air further along the same side.
+            BlockPos beam = helper.absolutePos(new BlockPos(8, 3, 2));
+            level.setBlockAndUpdate(beam, Blocks.OAK_LOG.defaultBlockState().setValue(net.minecraft.world.level.block.RotatedPillarBlock.AXIS,
+                    net.minecraft.core.Direction.Axis.X));
+            RoadWork.change(server, "a wall of another kingdom", state -> {
+                Wall theirs = new Wall(state.nextWallId(), 0, other, Wall.WallClass.PALISADE, Dimensions.id(level), palisade.getX() + 200,
+                        palisade.getZ(), ring(palisade.getX() + 200, palisade.getZ(), 4, palisade.getY() - 1), List.of(), 0);
+                theirs.markPlaced(palisade.asLong());
+                theirs.markPlaced(palisade.above().asLong());
+                state.putWall(theirs);
+                otherWall[0] = theirs.id();
+                return Outcome.DONE;
+            });
+            City city = city(helper, kingdom);
+            Wall wall = build(helper, kingdom, city, Wall.WallClass.PALISADE, Wall.FOLLOW_GROUND);
+            int y = helper.absolutePos(MIDDLE).getY();
+            payAndPlace(helper, wall);
+            helper.assertTrue(level.getBlockState(palisade).is(Blocks.OAK_LOG) && level.getBlockState(palisade.above()).is(Blocks.OAK_LOG),
+                    "The palisade of another kingdom was taken down");
+            helper.assertTrue(level.getBlockState(beam).is(Blocks.OAK_LOG), "The beam of a player was taken down");
+            helper.assertTrue(CityWalls.blockedInWay(wall.id()), "The blocks of others in the way were not noted");
+            // Around them the wall stands whole.
+            helper.assertTrue(level.getBlockState(palisade.above(2)).is(Blocks.SPRUCE_LOG) && level.getBlockState(palisade.above(3)).is(Blocks.SPRUCE_LOG),
+                    "The wall has no blocks over the palisade of the neighbour");
+            for (int up = 1; up <= 4; up++) {
+                BlockPos at = new BlockPos(beam.getX(), y + up, beam.getZ());
+                if (!at.equals(beam)) {
+                    helper.assertTrue(level.getBlockState(at).is(Blocks.SPRUCE_LOG), "A gap around the beam at " + at);
+                }
+            }
+            helper.assertTrue(stored(server, kingdom, Items.OAK_LOG) == 0, "Logs of others reached the storehouse");
+        } finally {
+            RoadWork.state(server).removeWall(otherWall[0]);
+            finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
 }
