@@ -421,7 +421,13 @@ public final class TradeWork {
         }
         int sold = 0;
         long income = 0;
-        for (Market.ExportRule rule : market.exports()) {
+        // The dearest goods first: a heap of cheap stone at the head of the rules does not eat the merchants' day.
+        List<Market.ExportRule> byWorth = new ArrayList<>(market.exports());
+        byWorth.sort(java.util.Comparator.comparingDouble((Market.ExportRule rule) -> {
+            Item item = GoodsStacks.item(rule.item());
+            return item == null ? 0.0 : MarketStock.worth(server, item).amount();
+        }).reversed());
+        for (Market.ExportRule rule : byWorth) {
             if (allowance <= 0 || incomeLeft <= 0) {
                 break;
             }

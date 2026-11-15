@@ -1149,14 +1149,33 @@ public final class RulerActions {
         return changed > 0 ? Result.done(decision) : Result.failed(KingdomError.UNCHANGED, decision);
     }
 
+    /**
+     * The surplus goes to the market and abroad: the good decided and every other good the storehouses heap up beyond twice
+     * what the kingdom wants get a rule for its merchants, which sell the dearest first.
+     */
     private static Result sell(MinecraftServer server, UUID id, RulerDecision decision) {
         RulerView.Good good = good(server, id, decision.subject());
-        int keep = (int) Math.min(Market.MAX_COUNT, good == null ? 64 : Math.max(16, good.want() * 2));
-        Outcome sell = KingdomWorldApi.change(server, "sell surplus of a kingdom of the world",
-                state -> state.putSell(null, id, new Market.SellEntry(decision.subject(), 0, keep), TradeSettings.rules()));
-        KingdomWorldApi.change(server, "export surplus of a kingdom of the world",
+        int keep = keep(good);
+        KingdomWorldState world = KingdomWorldApi.state(server);
+        boolean listed = world.trade().existing(id).map(market -> market.sells().stream().anyMatch(entry -> entry.item().equals(decision.subject())))
+                .orElse(false);
+        if (!listed) {
+            KingdomWorldApi.change(server, "sell surplus of a kingdom of the world",
+                    state -> state.putSell(null, id, new Market.SellEntry(decision.subject(), 0, keep), TradeSettings.rules()));
+        }
+        Outcome export = KingdomWorldApi.change(server, "export surplus of a kingdom of the world",
                 state -> state.putExport(null, id, new Market.ExportRule(decision.subject(), keep), TradeSettings.rules()));
-        return Result.of(sell, decision);
+        NpcRulers.lastView(id).ifPresent(view -> view.goods.values().forEach(other -> {
+            if (other.surplus() > 0 && !other.item().equals(decision.subject()) && !view.exporting.contains(other.item())) {
+                KingdomWorldApi.change(server, "export surplus of a kingdom of the world",
+                        state -> state.putExport(null, id, new Market.ExportRule(other.item(), keep(other)), TradeSettings.rules()));
+            }
+        }));
+        return Result.of(export, decision);
+    }
+
+    private static int keep(RulerView.Good good) {
+        return (int) Math.min(Market.MAX_COUNT, good == null ? 64 : Math.max(16, good.want() * 2));
     }
 
     private static Result buy(MinecraftServer server, UUID id, RulerDecision decision) {

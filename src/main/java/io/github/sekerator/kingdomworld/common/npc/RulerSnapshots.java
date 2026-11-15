@@ -574,6 +574,7 @@ final class RulerSnapshots {
         state.trade().existing(id).ifPresent(market -> {
             market.sells().forEach(entry -> view.selling.add(entry.item()));
             market.buys().forEach(entry -> view.buying.add(entry.item()));
+            market.exports().forEach(rule -> view.exporting.add(rule.item()));
         });
         for (io.github.sekerator.kingdomworld.core.production.Order order : state.orders().mainOrdersOf(id)) {
             if (order.kind() == io.github.sekerator.kingdomworld.core.production.Order.Kind.KEEP) {

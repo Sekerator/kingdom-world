@@ -183,6 +183,8 @@ public final class RulerView {
     /** Goods on the market of the kingdom already, sold or bought. */
     public List<String> selling = new ArrayList<>();
     public List<String> buying = new ArrayList<>();
+    /** Goods its merchants sell abroad already. */
+    public List<String> exporting = new ArrayList<>();
     /** Goods the workshops are told to keep already. */
     public List<String> ordered = new ArrayList<>();
     /** Goods the workshops of the kingdom can make. */
@@ -273,6 +275,7 @@ public final class RulerView {
         view.neighbours = new ArrayList<>(neighbours);
         view.selling = new ArrayList<>(selling);
         view.buying = new ArrayList<>(buying);
+        view.exporting = new ArrayList<>(exporting);
         view.ordered = new ArrayList<>(ordered);
         view.makeable = new ArrayList<>(makeable);
         view.entryFee = entryFee;

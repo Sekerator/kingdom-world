@@ -812,8 +812,12 @@ public final class RulerMind {
         return Optional.empty();
     }
 
+    /**
+     * The surplus its merchants do not sell abroad yet, the most worth first: a good on the market of the kingdom from its
+     * founding is still a heap in the storehouses until its merchants take it abroad.
+     */
     private static Optional<RulerView.Good> surplus(RulerView view) {
-        return view.goods.values().stream().filter(good -> good.surplus() > 0 && !view.selling.contains(good.item()))
+        return view.goods.values().stream().filter(good -> good.surplus() > 0 && !view.exporting.contains(good.item()))
                 .max(Comparator.comparingLong(good -> good.surplus() * Math.max(1, good.worth())));
     }
 
