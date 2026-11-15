@@ -22,6 +22,14 @@ public final class SiteRegistry {
     private final Map<UUID, Map<String, Set<WorldPos>>> byKingdom = new LinkedHashMap<>();
     /** The positions of the places of every chunk, in the order the places were first recorded there. */
     private final ChunkBuckets<WorldPos> byChunk = new ChunkBuckets<>();
+    /**
+     * The free places of every kingdom and kind by the number they got when they came into {@link #byKingdom}: in the same order as
+     * there, so that a look over the free places only finds them in the order a look over all of them would.
+     */
+    private final Map<UUID, Map<String, java.util.TreeMap<Long, WorldPos>>> freeByKingdom = new java.util.HashMap<>();
+    /** The number of every place in the order of {@link #byKingdom}. */
+    private final Map<WorldPos, Long> order = new java.util.HashMap<>();
+    private long nextOrder;
     private Runnable changeListener = () -> {
     };
 
@@ -42,6 +50,23 @@ public final class SiteRegistry {
         Set<WorldPos> positions = positions(kingdomId, kind);
         List<Site> result = new ArrayList<>(positions.size());
         for (WorldPos pos : positions) {
+            result.add(byPos.get(pos));
+        }
+        return result;
+    }
+
+    /**
+     * The free places of one kind of a kingdom, in the order they were found: what {@link #sitesOf(UUID, String)} gives without
+     * those taken, without looking at those.
+     */
+    public List<Site> freeSitesOf(UUID kingdomId, String kind) {
+        Map<String, java.util.TreeMap<Long, WorldPos>> kinds = freeByKingdom.get(kingdomId);
+        java.util.TreeMap<Long, WorldPos> free = kinds == null ? null : kinds.get(kind);
+        if (free == null) {
+            return List.of();
+        }
+        List<Site> result = new ArrayList<>(free.size());
+        for (WorldPos pos : free.values()) {
             result.add(byPos.get(pos));
         }
         return result;
@@ -155,8 +180,7 @@ public final class SiteRegistry {
         }
         Site site = new Site(pos, kind, kingdomId, null);
         byPos.put(pos, site);
-        byKingdom.computeIfAbsent(kingdomId, k -> new LinkedHashMap<>())
-                .computeIfAbsent(kind, k -> new LinkedHashSet<>()).add(pos);
+        index(site);
         changeListener.run();
         return Optional.ofNullable(existing);
     }
@@ -175,7 +199,11 @@ public final class SiteRegistry {
     void setOccupant(WorldPos pos, UUID citizen) {
         Site site = byPos.get(pos);
         if (site != null && !Objects.equals(site.occupant(), citizen)) {
-            byPos.put(pos, site.withOccupant(citizen));
+            Site changed = site.withOccupant(citizen);
+            byPos.put(pos, changed);
+            if (changed.isFree() != site.isFree()) {
+                indexFree(changed);
+            }
             changeListener.run();
         }
     }
@@ -185,7 +213,9 @@ public final class SiteRegistry {
         for (Site site : removed) {
             byPos.remove(site.pos());
             byChunk.remove(site.pos().dimension(), site.pos().chunk(), site.pos());
+            order.remove(site.pos());
         }
+        freeByKingdom.remove(kingdomId);
         if (byKingdom.remove(kingdomId) != null) {
             changeListener.run();
         }
@@ -203,11 +233,58 @@ public final class SiteRegistry {
         }
         byPos.put(site.pos(), site);
         byChunk.add(site.pos().dimension(), site.pos().chunk(), site.pos());
+        index(site);
+    }
+
+    /**
+     * Enters a place into the places of its kingdom and kind, at their end, and among the free ones if it is free.
+     */
+    private void index(Site site) {
         byKingdom.computeIfAbsent(site.kingdomId(), k -> new LinkedHashMap<>())
                 .computeIfAbsent(site.kind(), k -> new LinkedHashSet<>()).add(site.pos());
+        order.put(site.pos(), nextOrder++);
+        indexFree(site);
+    }
+
+    /**
+     * Puts a place among the free places of its kingdom and kind while it is free, and takes it out of them while it is not.
+     */
+    private void indexFree(Site site) {
+        Long number = order.get(site.pos());
+        if (number == null) {
+            return;
+        }
+        if (site.isFree()) {
+            freeByKingdom.computeIfAbsent(site.kingdomId(), k -> new java.util.HashMap<>())
+                    .computeIfAbsent(site.kind(), k -> new java.util.TreeMap<>()).put(number, site.pos());
+            return;
+        }
+        Map<String, java.util.TreeMap<Long, WorldPos>> kinds = freeByKingdom.get(site.kingdomId());
+        java.util.TreeMap<Long, WorldPos> free = kinds == null ? null : kinds.get(site.kind());
+        if (free != null) {
+            free.remove(number);
+            if (free.isEmpty()) {
+                kinds.remove(site.kind());
+                if (kinds.isEmpty()) {
+                    freeByKingdom.remove(site.kingdomId());
+                }
+            }
+        }
     }
 
     private void unindex(Site site) {
+        Long number = order.remove(site.pos());
+        Map<String, java.util.TreeMap<Long, WorldPos>> freeKinds = freeByKingdom.get(site.kingdomId());
+        java.util.TreeMap<Long, WorldPos> free = freeKinds == null || number == null ? null : freeKinds.get(site.kind());
+        if (free != null) {
+            free.remove(number);
+            if (free.isEmpty()) {
+                freeKinds.remove(site.kind());
+                if (freeKinds.isEmpty()) {
+                    freeByKingdom.remove(site.kingdomId());
+                }
+            }
+        }
         Map<String, Set<WorldPos>> kinds = byKingdom.get(site.kingdomId());
         if (kinds == null) {
             return;

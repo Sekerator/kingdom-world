@@ -84,6 +84,13 @@ public final class BuildingEffects {
     private static MinecraftServer madeFor;
     /** Positions of the containers of each warehouse, as last seen. */
     private static final Map<Long, List<BlockPos>> CONTAINERS = new HashMap<>();
+    /** A mark of every change of the states of the buildings or of the containers of warehouses found. */
+    private static long changes;
+    /** The containers of warehouses of the kingdoms asked for in the current tick, while nothing changed. */
+    private static final Map<UUID, List<StorehouseInventory>> CONTAINED = new HashMap<>();
+    private static long containedTick = Long.MIN_VALUE;
+    private static long containedChanges = -1;
+    private static MinecraftServer containedFor;
 
     /**
      * A building among the effects: its kingdom and its place in the list of the kingdom.
@@ -108,6 +115,9 @@ public final class BuildingEffects {
         madeVersion = -1;
         madeFor = null;
         CONTAINERS.clear();
+        CONTAINED.clear();
+        containedFor = null;
+        changes++;
     }
 
     /**
@@ -115,6 +125,7 @@ public final class BuildingEffects {
      */
     public static void changed() {
         dirty = true;
+        changes++;
     }
 
     /**
@@ -182,6 +193,7 @@ public final class BuildingEffects {
         }
         Effect fresh = effect(server, state, now.get(), threshold);
         list.set(slot.index(), fresh);
+        changes++;
         boolean was = old.works() && BuildingRoles.HOUSE.equals(old.building().role());
         boolean is = fresh.works() && BuildingRoles.HOUSE.equals(fresh.building().role());
         if (was != is) {
@@ -266,6 +278,7 @@ public final class BuildingEffects {
             made.put(kingdom.getKey(), new BuildingIndex(entries));
         }
         effects = result;
+        changes++;
         indexes = made;
         workingHouses = houses;
         slots = order;
@@ -486,7 +499,8 @@ public final class BuildingEffects {
         double bestDistance = Double.MAX_VALUE;
         int bestRank = -1;
         boolean keeps = keepsBunks(server, kingdomId);
-        for (Site bed : KingdomWorldApi.state(server).citizens().sites().sitesOf(kingdomId, SiteKinds.BED)) {
+        // Only the free beds, in the order of all of them: a kingdom whose beds are taken has none to look at.
+        for (Site bed : KingdomWorldApi.state(server).citizens().sites().freeSitesOf(kingdomId, SiteKinds.BED)) {
             if (!bed.isFree() || !where.test(bed.pos()) || !bedUsable(server, kingdomId, bed.pos())) {
                 continue;
             }
@@ -523,7 +537,7 @@ public final class BuildingEffects {
         int free = 0;
         int inHouses = 0;
         boolean keeps = keepsBunks(server, kingdomId);
-        for (Site bed : KingdomWorldApi.state(server).citizens().sites().sitesOf(kingdomId, SiteKinds.BED)) {
+        for (Site bed : KingdomWorldApi.state(server).citizens().sites().freeSitesOf(kingdomId, SiteKinds.BED)) {
             if (!bed.isFree() || !bedUsable(server, kingdomId, bed.pos()) || (keeps && inBarracks(server, kingdomId, bed.pos()))) {
                 continue;
             }
@@ -702,6 +716,7 @@ public final class BuildingEffects {
             CONTAINERS.put(building.id(), scan(level, building));
         }
         CONTAINERS.keySet().retainAll(live);
+        changes++;
     }
 
     static List<BlockPos> scan(ServerLevel level, Building building) {
@@ -740,10 +755,37 @@ public final class BuildingEffects {
      * warehouse as its role allows.
      */
     public static List<StorehouseInventory> containers(MinecraftServer server, UUID kingdomId) {
-        List<StorehouseInventory> result = new ArrayList<>();
+        return new ArrayList<>(containersNow(server, kingdomId));
+    }
+
+    /**
+     * The containers of the warehouses of a kingdom as {@link #containers} finds them, found once a tick while the states of the
+     * buildings and the containers found stay as they are: a worker asks for the storehouses of its kingdom at every delivery, plan
+     * and step of far work. A container gone or unloaded later in the tick takes nothing in and gives nothing out, as before.
+     */
+    public static List<StorehouseInventory> containersNow(MinecraftServer server, UUID kingdomId) {
         if (CONTAINERS.isEmpty()) {
-            return result;
+            return List.of();
         }
+        // The states first: working them out anew is a change.
+        all(server);
+        long tick = server.getTickCount();
+        if (tick != containedTick || changes != containedChanges || server != containedFor) {
+            CONTAINED.clear();
+            containedTick = tick;
+            containedChanges = changes;
+            containedFor = server;
+        }
+        List<StorehouseInventory> known = CONTAINED.get(kingdomId);
+        if (known == null) {
+            known = java.util.Collections.unmodifiableList(findContainers(server, kingdomId));
+            CONTAINED.put(kingdomId, known);
+        }
+        return known;
+    }
+
+    private static List<StorehouseInventory> findContainers(MinecraftServer server, UUID kingdomId) {
+        List<StorehouseInventory> result = new ArrayList<>();
         for (Effect effect : working(server, kingdomId, BuildingRoles.WAREHOUSE)) {
             List<BlockPos> positions = CONTAINERS.get(effect.building().id());
             ServerLevel level = ConstructionWork.level(server, effect.building().dimension());

@@ -95,9 +95,12 @@ public final class KingdomStorage {
      */
     public static List<StorehouseInventory> storehouses(MinecraftServer server, UUID kingdomId, @Nullable WorldPos near) {
         KingdomSavedData data = KingdomSavedData.get(server);
-        List<StorehouseInventory> result = new ArrayList<>(byKingdom(server, data).getOrDefault(kingdomId, List.of()));
+        List<StorehouseInventory> own = byKingdom(server, data).getOrDefault(kingdomId, List.of());
         // The containers of the warehouses of the kingdom count as storehouses while their place is loaded.
-        result.addAll(io.github.sekerator.kingdomworld.common.construction.BuildingEffects.containers(server, kingdomId));
+        List<StorehouseInventory> containers = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.containersNow(server, kingdomId);
+        List<StorehouseInventory> result = new ArrayList<>(own.size() + containers.size());
+        result.addAll(own);
+        result.addAll(containers);
         if (near != null) {
             result.sort(Comparator.comparingDouble(inventory -> near.distanceSqr(inventory.pos())));
         }
