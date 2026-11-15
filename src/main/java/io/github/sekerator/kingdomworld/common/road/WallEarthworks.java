@@ -66,6 +66,12 @@ final class WallEarthworks {
     private static final Set<Long> TOLD_BLOCKED = new HashSet<>();
     /** The day a kingdom last heard that a wall waits for earth, by wall. */
     private static final Map<Long, Long> TOLD_EARTH = new HashMap<>();
+    /** The game time a wall that found no earth looks at the storehouses again, by wall. */
+    private static final Map<Long, Long> NO_EARTH_UNTIL = new HashMap<>();
+    /** Ticks a wall that found no earth waits before it looks at the storehouses again. */
+    private static final long EARTH_WAIT = 100;
+    /** Whether the storehouses are looked at whatever the wait: walls placed at once by operators and tests. */
+    static boolean eager;
 
     private WallEarthworks() {
     }
@@ -74,6 +80,7 @@ final class WallEarthworks {
         BLOCKED.clear();
         TOLD_BLOCKED.clear();
         TOLD_EARTH.clear();
+        NO_EARTH_UNTIL.clear();
     }
 
     // ---------------------------------------------------------------- the ground
@@ -159,8 +166,8 @@ final class WallEarthworks {
             int surface = io.github.sekerator.kingdomworld.common.construction.Earthworks.surface(level, x, z) - 1;
             cutTop = Math.max(top, Math.min(surface, foot + ConstructionSettings.earthworkDepth() + block.height()));
         }
-        fell(level, wall, x, z, foot, cutTop);
-        clear(level, wall, x, z, foot + 1, cutTop, top);
+        Set<Long> pillars = fell(level, wall, x, z, foot, cutTop);
+        clear(level, wall, x, z, foot + 1, cutTop, top, pillars);
         if (!fillUnder(level, wall, x, foot, z)) {
             tellEarth(level.getServer(), wall);
             return Step.NO_EARTH;
@@ -171,8 +178,11 @@ final class WallEarthworks {
     /**
      * Fells every tree whose trunk stands in a column between two heights, whole: its logs and leaves to the storehouses. A column
      * of logs without a crown was put up by somebody and stays.
+     *
+     * @return the logs of such columns, which stay
      */
-    private static void fell(ServerLevel level, Wall wall, int x, int z, int foot, int top) {
+    private static Set<Long> fell(ServerLevel level, Wall wall, int x, int z, int foot, int top) {
+        Set<Long> pillars = new HashSet<>();
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, foot, z);
         UUID kingdom = wall.kingdomId();
         for (int y = Math.max(foot - 1, level.getMinBuildHeight()); y <= top; y++) {
@@ -188,6 +198,13 @@ final class WallEarthworks {
             });
             Trees.Tree tree = Trees.find(level, base, zone, land, MAX_LOGS, false);
             if (tree == null) {
+                if (Trees.isBase(level, base, state)) {
+                    // A column of logs without a crown: every log of it up the column stays.
+                    for (int up = y; up <= top && Trees.isLog(level.getBlockState(pos.setY(up))); up++) {
+                        pillars.add(pos.asLong());
+                    }
+                    pos.setY(y);
+                }
                 continue;
             }
             for (BlockPos log : tree.logs()) {
@@ -200,6 +217,7 @@ final class WallEarthworks {
                 }
             }
         }
+        return pillars;
     }
 
     /**
@@ -208,7 +226,7 @@ final class WallEarthworks {
      *
      * @param wallTop the top of the wall itself; above it only natural ground is cut, nothing is noted
      */
-    private static void clear(ServerLevel level, Wall wall, int x, int z, int from, int to, int wallTop) {
+    private static void clear(ServerLevel level, Wall wall, int x, int z, int from, int to, int wallTop, Set<Long> pillars) {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, from, z);
         for (int y = from; y <= to; y++) {
             BlockState state = level.getBlockState(pos.setY(y));
@@ -220,7 +238,7 @@ final class WallEarthworks {
             if (mine(wall, at) || otherWall(level.getServer(), wall, at)) {
                 continue;
             }
-            if (natural(state) && !ConstructionWork.isProtected(level, pos, state)) {
+            if (natural(state) && !pillars.contains(at) && !ConstructionWork.isProtected(level, pos, state)) {
                 remove(level, wall, pos.immutable(), state);
             } else if (y <= wallTop) {
                 blocked(wall, x, y, z);
@@ -229,14 +247,17 @@ final class WallEarthworks {
     }
 
     /**
-     * Fills a hole under a column from the solid ground up to its foot, as deep as earthworks may go.
+     * Fills a hole under a column from the solid ground up to its foot; a hole deeper than earthworks may go is left open.
      *
      * @return whether the column stands on the ground now; {@code false} if earth ran out
      */
     private static boolean fillUnder(ServerLevel level, Wall wall, int x, int foot, int z) {
         int ground = groundUnder(level, x, foot, z);
-        int from = Math.max(ground + 1, foot - ConstructionSettings.earthworkDepth() + 1);
-        return fill(level, wall, x, z, from, foot);
+        if (foot - ground > ConstructionSettings.earthworkDepth()) {
+            // A cave or a gorge deeper than earthworks go opens under the column: it is not filled, the column goes up as it is.
+            return true;
+        }
+        return fill(level, wall, x, z, ground + 1, foot);
     }
 
     /**
@@ -282,6 +303,22 @@ final class WallEarthworks {
         if (io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, wall.kingdomId())) {
             return net.minecraft.world.item.Items.DIRT;
         }
+        long now = KingdomWorldApi.gameTime(server);
+        Long until = NO_EARTH_UNTIL.get(wall.id());
+        if (!eager && until != null && now < until) {
+            return null;
+        }
+        Item found = fromStorehouses(level, wall, at);
+        if (found == null) {
+            NO_EARTH_UNTIL.put(wall.id(), now + EARTH_WAIT);
+        } else {
+            NO_EARTH_UNTIL.remove(wall.id());
+        }
+        return found;
+    }
+
+    private static Item fromStorehouses(ServerLevel level, Wall wall, BlockPos at) {
+        MinecraftServer server = level.getServer();
         Map<String, Long> stock = KingdomStorage.countsById(server, wall.kingdomId());
         List<String> order = new ArrayList<>(List.of("minecraft:dirt", "minecraft:coarse_dirt"));
         for (String id : stock.keySet()) {
@@ -397,8 +434,8 @@ final class WallEarthworks {
             }
             int surface = io.github.sekerator.kingdomworld.common.construction.Earthworks.surface(level, cell.x(), cell.z()) - 1;
             int cutTop = Math.max(head, Math.min(surface, foot + ConstructionSettings.earthworkDepth() + head - foot));
-            fell(level, wall, cell.x(), cell.z(), foot, cutTop);
-            clear(level, wall, cell.x(), cell.z(), foot + 1, cutTop, foot);
+            Set<Long> pillars = fell(level, wall, cell.x(), cell.z(), foot, cutTop);
+            clear(level, wall, cell.x(), cell.z(), foot + 1, cutTop, foot, pillars);
             fillUnder(level, wall, cell.x(), foot, cell.z());
             for (int side = -1; side <= 1; side += 2) {
                 ramp(level, wall, cell.x(), cell.z(), nx * side, nz * side, foot);
@@ -424,7 +461,7 @@ final class WallEarthworks {
             }
             int height = floor + Integer.signum(land - floor) * k;
             if (land > height) {
-                clear(level, wall, cx, cz, height + 1, land, Integer.MIN_VALUE);
+                clear(level, wall, cx, cz, height + 1, land, Integer.MIN_VALUE, Set.of());
             } else if (!fill(level, wall, cx, cz, land + 1, height)) {
                 return;
             }

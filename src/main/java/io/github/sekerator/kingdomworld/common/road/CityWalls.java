@@ -1469,11 +1469,22 @@ public final class CityWalls {
             return 0;
         }
         int placed = 0;
-        for (Road.Section section : wall.sections()) {
-            for (Wall.Block block : wall.blocksOf(section)) {
-                level.getChunk(new BlockPos(block.x(), block.y(), block.z()));
+        boolean before = WallEarthworks.eager;
+        WallEarthworks.eager = true;
+        try {
+            for (Road.Section section : wall.sections()) {
+                for (Wall.Block block : wall.blocksOf(section)) {
+                    // The earthworks of a column look two blocks round it.
+                    for (int dx = -2; dx <= 2; dx += 2) {
+                        for (int dz = -2; dz <= 2; dz += 2) {
+                            level.getChunk(new BlockPos(block.x() + dx, block.y(), block.z() + dz));
+                        }
+                    }
+                }
+                placed += placeSection(level, wall, section, Integer.MAX_VALUE);
             }
-            placed += placeSection(level, wall, section, Integer.MAX_VALUE);
+        } finally {
+            WallEarthworks.eager = before;
         }
         if (wall.built() && wall.buildingId() == 0) {
             register(server, wall);
