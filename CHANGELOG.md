@@ -4,7 +4,7 @@
 
 ### 1.6.2
 
-Плавильщик и повар работают партиями и топят сразу все печи своей зоны, а мастерские ходят на склад за ингредиентами на всю партию.
+Плавильщик и повар работают партиями и топят сразу все печи своей зоны, а мастерские ходят на склад за ингредиентами на всю партию. Зона поста может заходить за границу королевства, а двое строителей одной стройки больше не делают одно и то же. Сетевой протокол 70: клиент и сервер должны быть одной версии мода.
 
 - **Исправлено: плавильщик по одной руде.** Плавильщик брал со склада одну руду, даже если там лежал стак, нёс её к одной печи, ждал переплавки, относил один слиток на склад и шёл за следующей. Печей в зоне поста могло быть несколько, а горела одна, и стак руды переплавлялся полдня. Теперь работник берёт партию: столько, сколько ещё просит заказ (для своей работы в режиме «Сам и по заказам» сколько есть), сколько лежит на складах и в контейнере поста и сколько влезает в его сумку и в свободные печи (до стака ингредиента на печь).
 - **Все печи сразу.** Партия раскладывается поровну по всем свободным печам нужного вида в зоне поста: печам, плавильным печам или коптильням. Работник обходит свои печи и забирает готовое снизу по мере готовности, а не стоит у одной. Чем больше печей, тем быстрее: стак руды в трёх печах плавится втрое быстрее. Число печей у работника не ограничено.
@@ -336,7 +336,7 @@
 
 ### 1.6.2
 
-The smelter and the cook work in batches and keep all the furnaces of their zone burning at once, and workshops fetch the ingredients of a whole batch at once.
+The smelter and the cook work in batches and keep all the furnaces of their zone burning at once, and workshops fetch the ingredients of a whole batch at once. The zone of a post may reach beyond the border of the kingdom, and two builders of one construction no longer do the same. Network protocol 70: client and server must run the same version of the mod.
 
 - **Fixed: a smelter one ore at a time.** A smelter took one ore from the storehouse even where a stack lay, carried it to one furnace, waited for it to smelt, brought one ingot to the storehouse and went for the next. A post could have several furnaces in its zone and only one burned, so that a stack of ore took half a day. Now a worker takes a batch: as much as the order still asks for (for its own work in the mode "Own work and orders" as much as there is), as the storehouses and the container of the post hold and as fits into its bag and the free furnaces (up to a stack of the ingredient in each).
 - **All the furnaces at once.** A batch is spread evenly over all the free furnaces of the kind in the zone of the post: furnaces, blast furnaces or smokers. The worker goes round its furnaces and takes the results out from below as they come, rather than standing at one. The more furnaces, the faster: a stack of ore in three furnaces smelts in a third of the time. A worker tends any number of furnaces.
