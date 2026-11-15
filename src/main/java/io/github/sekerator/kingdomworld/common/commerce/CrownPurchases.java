@@ -183,6 +183,12 @@ public final class CrownPurchases {
         long day = TreasuryActions.day(server);
         OrderBook.Buying buying = buying(server, kingdom);
         Map<String, Long> counts = KingdomStorage.countsById(server, kingdom);
+        // What the crown asks for an item, by the stock counted above: the same for every shop and order of the step, so it is
+        // worked out once.
+        Map<String, Long> crownMilli = new HashMap<>();
+        // What a workshop makes an item for depends on its trade and the workstations of its place alone in the step: shops of the
+        // same trade at like places, and orders of the same item, work it out once.
+        Map<MadeKey, Long> made = new HashMap<>();
         for (Map.Entry<Order, Integer> want : wants.entrySet()) {
             Order order = want.getKey();
             Item item = GoodsStacks.item(order.item());
@@ -202,7 +208,7 @@ public final class CrownPurchases {
             long bought = buy(server, kingdom, order.item(), item, need, capMilli, budget, order, day);
             if (bought < need && committed(server, kingdom, order.id()) == 0) {
                 long left = budget(server, kingdom, day);
-                if (!commission(server, kingdom, order, item, need - bought, capMilli, left, counts, day)) {
+                if (!commission(server, kingdom, order, item, need - bought, capMilli, left, counts, crownMilli, made, day)) {
                     // Nobody makes it: building materials wanted of the citizens tell the cities to take up a craft for them.
                     int category = Shops.categoryOf(server, item);
                     if (category == GoodsCategory.MATERIALS.ordinal()) {
@@ -211,6 +217,12 @@ public final class CrownPurchases {
                 }
             }
         }
+    }
+
+    /**
+     * What a workshop of a trade at a place with some workstations makes an item for, in a step of the purchases.
+     */
+    private record MadeKey(String trade, Set<String> stations, String item) {
     }
 
     /**
@@ -336,7 +348,7 @@ public final class CrownPurchases {
      * @return whether a master took the work
      */
     private static boolean commission(MinecraftServer server, UUID kingdom, Order order, Item item, long count, long capMilli, long budget,
-                                      Map<String, Long> counts, long day) {
+                                      Map<String, Long> counts, Map<String, Long> crownMilli, Map<MadeKey, Long> made, long day) {
         if (count <= 0 || budget <= 0) {
             return false;
         }
@@ -352,12 +364,14 @@ public final class CrownPurchases {
             if (!trade.fits(stations)) {
                 continue;
             }
-            ShopMaking.Context context = Workshops.context(server, trade, stations, other -> {
-                Item raw = GoodsStacks.item(other);
-                long stock = counts.getOrDefault(other, 0L);
-                return raw == null || stock <= 0 ? -1 : Shops.crownPrice(server, kingdom, other, raw, stock) * ShopPricing.MILLI;
-            }, null);
-            long unit = new ShopMaking.Planner(context).madeUnitMilli(id);
+            long unit = made.computeIfAbsent(new MadeKey(shop.trade(), stations, id), key -> {
+                ShopMaking.Context context = Workshops.context(server, trade, stations, other -> crownMilli.computeIfAbsent(other, raw -> {
+                    Item rawItem = GoodsStacks.item(raw);
+                    long stock = counts.getOrDefault(raw, 0L);
+                    return rawItem == null || stock <= 0 ? -1 : Shops.crownPrice(server, kingdom, raw, rawItem, stock) * ShopPricing.MILLI;
+                }), null);
+                return new ShopMaking.Planner(context).madeUnitMilli(id);
+            });
             if (unit >= Long.MAX_VALUE / 16) {
                 continue;
             }
