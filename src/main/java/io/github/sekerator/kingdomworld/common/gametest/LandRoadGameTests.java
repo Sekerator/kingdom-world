@@ -7,6 +7,7 @@ import io.github.sekerator.kingdomworld.common.economy.TreasuryActions;
 import io.github.sekerator.kingdomworld.common.land.LandEvents;
 import io.github.sekerator.kingdomworld.common.land.Wilderness;
 import io.github.sekerator.kingdomworld.common.npc.NpcWork;
+import io.github.sekerator.kingdomworld.common.npc.TownRoads;
 import io.github.sekerator.kingdomworld.common.protection.ProtectionService;
 import io.github.sekerator.kingdomworld.common.road.PlannedRoads;
 import io.github.sekerator.kingdomworld.common.road.RoadSettings;
@@ -79,6 +80,56 @@ public final class LandRoadGameTests {
         NpcWork.state(server).removeSettlementsOf(kingdom.id());
         NpcWork.state(server).removeKingdom(kingdom.id());
         KingdomWorldApi.dissolveKingdom(server, kingdom.id());
+    }
+
+    /**
+     * A kingdom of the world stands without the road to a town that has no way to it: the road is looked for again, a minute
+     * after a restart and then a day after every try, and nothing is laid meanwhile.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_land_town_road_again", timeoutTicks = 600)
+    public static void aRoadToATownWithoutAWayIsLookedForAgainADayLater(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Kingdom kingdom = worldKingdom(server, "GameTest Town Road Again");
+        BlockPos start = helper.absolutePos(new BlockPos(1, 0, 1));
+        // A town far beyond the longest road the rules let be looked for.
+        io.github.sekerator.kingdomworld.core.npc.NpcSite site = NpcWork.state(server).addSite(start.getX(), start.getZ(), NpcLevel.SMALL, 7L,
+                List.of(new io.github.sekerator.kingdomworld.core.npc.NpcSite.Town(start.getX() + 30_000, start.getZ())));
+        site.setKingdomId(kingdom.id());
+        site.advance(io.github.sekerator.kingdomworld.core.npc.SpawnStage.DONE);
+        site.setStatus(io.github.sekerator.kingdomworld.core.npc.NpcSite.Status.SPAWNED);
+        Runnable cleanUp = () -> {
+            // The place is left alone from now on, and its kingdom goes.
+            site.block("a game test is over");
+            forget(server, kingdom);
+        };
+        long[] tried = {-1};
+        try {
+            TownRoads.look(server);
+            long now = KingdomWorldApi.gameTime(server);
+            helper.assertTrue(TownRoads.next(site.id()) > now, "The road left out is not looked for later: " + TownRoads.next(site.id()));
+            TownRoads.lookNow(server, site.id());
+            TownRoads.look(server);
+            tried[0] = KingdomWorldApi.gameTime(server);
+        } catch (RuntimeException e) {
+            cleanUp.run();
+            throw e;
+        }
+        helper.succeedWhen(() -> {
+            UUID id = kingdom.id();
+            if (io.github.sekerator.kingdomworld.common.road.RoadPlanning.searching(id)) {
+                helper.fail("Still searching");
+            }
+            // The look that follows the search: the way was not found, so it waits a day.
+            TownRoads.look(server);
+            helper.assertTrue(TownRoads.next(site.id()) >= tried[0] + TownRoads.RETRY_TICKS - 1, "The road is not looked for again a day later: "
+                    + TownRoads.next(site.id()) + " after a try at " + tried[0]);
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.NpcSpawner.roadTo(server, id, site.towns().get(0)).isEmpty(),
+                    "A road to a town without a way was laid");
+            long before = TownRoads.next(site.id());
+            TownRoads.look(server);
+            helper.assertTrue(TownRoads.next(site.id()) == before, "The road was looked for again before its day");
+            cleanUp.run();
+        });
     }
 
     @GameTest(template = EMPTY, batch = "kingdomworld_land_wilds", timeoutTicks = 100)

@@ -3304,6 +3304,7 @@
   "kingdomworld.screen.roads.top_level": "The top level",
   "kingdomworld.screen.map.city_level": "City %s (%s)",
   "kingdomworld.screen.map.capital_level": "Capital %s: %s",
+  "kingdomworld.road.town_road_missed": "No way was found for the road from the capital to the town at %s %s: it is looked for again tomorrow",
   "kingdomworld.road.wall_laid": "A wall is laid out around %s: %s",
   "kingdomworld.road.wall_built": "Wall #%s is built and entered into the register as a fortification",
   "kingdomworld.road.level.village": "village",

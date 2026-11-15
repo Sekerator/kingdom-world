@@ -3304,6 +3304,7 @@
   "kingdomworld.screen.roads.top_level": "Высший уровень",
   "kingdomworld.screen.map.city_level": "Город %s (%s)",
   "kingdomworld.screen.map.capital_level": "Столица %s: %s",
+  "kingdomworld.road.town_road_missed": "Путь для дороги от столицы к городу у %s %s не найден: его поищут снова завтра",
   "kingdomworld.road.wall_laid": "Вокруг %s размечена стена: %s",
   "kingdomworld.road.wall_built": "Стена №%s построена и внесена в реестр как укрепление",
   "kingdomworld.road.level.village": "деревня",

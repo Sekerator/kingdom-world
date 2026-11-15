@@ -95,7 +95,7 @@ public final class RoadWork {
     /**
      * Tells the members of a kingdom who run its construction.
      */
-    static void notify(MinecraftServer server, UUID kingdomId, Component message) {
+    public static void notify(MinecraftServer server, UUID kingdomId, Component message) {
         KingdomWorldApi.kingdom(server, kingdomId).ifPresent(kingdom -> KingdomActions.notifyMembers(server, kingdom,
                 Permission.MANAGE_CONSTRUCTION, message));
     }

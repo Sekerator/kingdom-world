@@ -239,6 +239,7 @@ public final class NpcSpawner {
         job = null;
         LAYING.clear();
         RELEASING.clear();
+        TownRoads.reset();
     }
 
     /**
@@ -433,6 +434,7 @@ public final class NpcSpawner {
 
     static void tick(MinecraftServer server) {
         releaseSome(server.overworld());
+        TownRoads.tick(server);
         Optional<NpcSite> spawning = NpcWork.state(server).spawning();
         if (spawning.isEmpty()) {
             if (job != null) {
@@ -2425,7 +2427,8 @@ public final class NpcSpawner {
             if (!RoadPlanning.searching(id)) {
                 job.searching = false;
                 if (roadTo(server, id, town).isEmpty()) {
-                    LOGGER.warn("No way was found from {} to its town {}", site, index + 1);
+                    // The founding goes on; the road to the town is tried again later (see TownRoads).
+                    TownRoads.missed(server, site, index, "no way was found");
                     site.setStep(index + 1);
                 }
             }
@@ -2434,28 +2437,33 @@ public final class NpcSpawner {
         if (RoadPlanning.searching(id)) {
             return;
         }
-        RoadClass roadClass = RoadClass.byId(job.composition.roadClass()).orElse(RoadClass.PATH);
-        Outcome started;
-        Optional<NpcComposition.Gate> gate = districts ? NpcCity.gateTowards(job.composition, town.x() - site.x(), town.z() - site.z())
+        Outcome started = startRoad(level, site, job.composition, id, town);
+        if (started.ok()) {
+            job.searching = true;
+        } else {
+            TownRoads.missed(server, site, index, "it was not started: " + started.error());
+            site.setStep(index + 1);
+        }
+    }
+
+    /**
+     * Starts the search for the road from the capital of a kingdom of the world to a town of it, built once it is found.
+     */
+    static Outcome startRoad(ServerLevel level, NpcSite site, NpcComposition composition, UUID id, NpcSite.Town town) {
+        RoadClass roadClass = RoadClass.byId(composition.roadClass()).orElse(RoadClass.PATH);
+        Optional<NpcComposition.Gate> gate = composition.districts() ? NpcCity.gateTowards(composition, town.x() - site.x(), town.z() - site.z())
                 : Optional.empty();
         if (gate.isPresent()) {
             // The road starts two blocks outside the gate nearest to the town: under the roof of the palace no way begins.
             int fromX = site.x() + gate.get().x() + 2 * Integer.signum(gate.get().x());
             int fromZ = site.z() + gate.get().z() + 2 * Integer.signum(gate.get().z());
-            started = RoadPlanning.startAndBuildFrom(level, id, Endpoint.capital(id, fromX, fromZ), town.x(), town.z(), roadClass,
+            return RoadPlanning.startAndBuildFrom(level, id, Endpoint.capital(id, fromX, fromZ), town.x(), town.z(), roadClass,
                     Road.Mode.OWN);
-        } else {
-            started = RoadPlanning.startAndBuild(level, id, site.x(), site.z(), town.x(), town.z(), roadClass, Road.Mode.OWN);
         }
-        if (started.ok()) {
-            job.searching = true;
-        } else {
-            LOGGER.warn("The road from {} to its town {} was not started: {}", site, index + 1, started.error());
-            site.setStep(index + 1);
-        }
+        return RoadPlanning.startAndBuild(level, id, site.x(), site.z(), town.x(), town.z(), roadClass, Road.Mode.OWN);
     }
 
-    private static Optional<Road> roadTo(MinecraftServer server, UUID id, NpcSite.Town town) {
+    public static Optional<Road> roadTo(MinecraftServer server, UUID id, NpcSite.Town town) {
         for (Road road : RoadWork.state(server).roads()) {
             if (!road.kingdomId().equals(id)) {
                 continue;
