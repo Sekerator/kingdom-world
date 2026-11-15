@@ -291,7 +291,8 @@ public final class RouteSearch {
                         int depth = deck - ground - 1;
                         boolean fill = depth <= rules.maxFill();
                         double cost = length * (fill ? rules.fillCost() * (1.0 + 0.25 * depth) : rules.bridgeCost()) + extra;
-                        offer(node, nx, nz, deck, node.run + 1, fill ? RouteCell.Kind.FILL : RouteCell.Kind.BRIDGE, depth, cost, -1);
+                        // Only an embankment keeps its depth: a bridge of this search has no pier.
+                        offer(node, nx, nz, deck, node.run + 1, fill ? RouteCell.Kind.FILL : RouteCell.Kind.BRIDGE, fill ? depth : 0, cost, -1);
                     }
                 }
             } else if (column.surface() == Terrain.Surface.WATER && !diagonal) {

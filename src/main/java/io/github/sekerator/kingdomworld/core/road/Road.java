@@ -22,7 +22,7 @@ public final class Road {
     /** Blocks of the middle of the road in one section. */
     public static final int SECTION_CELLS = 16;
     /** The longest way a road keeps, in blocks. */
-    public static final int MAX_CELLS = 8_192;
+    public static final int MAX_CELLS = 32_768;
 
     public enum Status {
         /** Waits for other kingdoms to let it cross their land. */
@@ -67,6 +67,9 @@ public final class Road {
         private boolean repairing;
         private int repairPaid;
         private final Map<String, Integer> pool = new LinkedHashMap<>();
+        /** Seconds of builders and of miners already given to the next block of a levelled road. */
+        private double builderWork;
+        private double minerWork;
 
         Section(int index, int firstCell, int endCell, int firstBlock, int endBlock, UUID builder) {
             this.index = index;
@@ -159,6 +162,38 @@ public final class Road {
             }
             items.forEach((item, count) -> pool.merge(item, count, Integer::sum));
             paid++;
+            builderWork = 0;
+            minerWork = 0;
+        }
+
+        /**
+         * Seconds of builders given to the next block of a levelled road.
+         */
+        public double builderWork() {
+            return builderWork;
+        }
+
+        /**
+         * Seconds of miners given to the next block of a levelled road.
+         */
+        public double minerWork() {
+            return minerWork;
+        }
+
+        /**
+         * Gives seconds of work to the next block.
+         */
+        public void addWork(double builders, double miners) {
+            builderWork += Math.max(0, builders);
+            minerWork += Math.max(0, miners);
+        }
+
+        /**
+         * Puts back the work given to the next block, read from saved data.
+         */
+        public void restoreWork(double builders, double miners) {
+            builderWork = Double.isFinite(builders) ? Math.max(0, builders) : 0;
+            minerWork = Double.isFinite(miners) ? Math.max(0, miners) : 0;
         }
 
         /**
@@ -258,6 +293,14 @@ public final class Road {
     private final long created;
     private final List<Section> sections = new ArrayList<>();
     private final List<RoadLayout.Block> blocks;
+    private final int layout;
+    /** Items dug out of the road and counted for its embankments and lining before they are dug, by item id. */
+    private final Map<String, Integer> credit = new LinkedHashMap<>();
+    /** Items counted that way and not dug out yet, by item id. */
+    private final Map<String, Integer> owed = new LinkedHashMap<>();
+    /** Seconds of the earthworks of a levelled road in all, and of those paid for. */
+    private double earthTotal;
+    private double earthDone;
     private Status status;
     private boolean paused;
     private int traffic;
@@ -267,6 +310,17 @@ public final class Road {
      */
     public Road(long id, UUID kingdomId, RoadClass roadClass, String dimension, Endpoint from, Endpoint to, List<RouteCell> cells, Mode mode,
                 long created, Status status, List<UUID> builders) {
+        this(id, kingdomId, roadClass, dimension, from, to, cells, mode, created, status, builders, RoadLayout.LAID, null);
+    }
+
+    /**
+     * @param builders who builds each section, in order; a missing entry means the road's own kingdom
+     * @param layout   {@link RoadLayout#LAID} or {@link RoadLayout#LEVELLED}
+     * @param surveys  the earthworks of every block of a levelled road, in the order of its blocks; empty ones when they do not
+     *                 fit its blocks
+     */
+    public Road(long id, UUID kingdomId, RoadClass roadClass, String dimension, Endpoint from, Endpoint to, List<RouteCell> cells, Mode mode,
+                long created, Status status, List<UUID> builders, int layout, List<RoadLayout.ColumnSurvey> surveys) {
         this.id = id;
         this.kingdomId = Objects.requireNonNull(kingdomId, "kingdomId");
         this.roadClass = Objects.requireNonNull(roadClass, "roadClass");
@@ -284,7 +338,8 @@ public final class Road {
             plain.add(cell.withoutOwner());
         }
         this.cells = List.copyOf(plain);
-        this.blocks = RoadLayout.blocks(this.cells, roadClass);
+        this.layout = layout == RoadLayout.LEVELLED ? RoadLayout.LEVELLED : RoadLayout.LAID;
+        this.blocks = List.copyOf(RoadLayout.blocks(this.cells, roadClass, this.layout, surveys));
         int count = sectionCount(this.cells.size());
         int block = 0;
         for (int i = 0; i < count; i++) {
@@ -333,6 +388,148 @@ public final class Road {
 
     public List<RoadLayout.Block> blocks() {
         return blocks;
+    }
+
+    /**
+     * {@link RoadLayout#LAID} for a road laid on the land as it is, {@link RoadLayout#LEVELLED} for a levelled one.
+     */
+    public int layout() {
+        return layout;
+    }
+
+    public boolean levelled() {
+        return layout == RoadLayout.LEVELLED;
+    }
+
+    /**
+     * Seconds of the earthworks of a levelled road in all.
+     */
+    public double earthTotal() {
+        return earthTotal;
+    }
+
+    /**
+     * Seconds of its earthworks paid for.
+     */
+    public double earthDone() {
+        return earthDone;
+    }
+
+    public void setEarthTotal(double value) {
+        earthTotal = Double.isFinite(value) ? Math.max(0, value) : 0;
+    }
+
+    public void addEarthDone(double value) {
+        if (Double.isFinite(value) && value > 0) {
+            earthDone = Math.min(earthTotal, earthDone + value);
+        }
+    }
+
+    /**
+     * Puts back the earthworks read from saved data.
+     */
+    public void restoreEarth(double total, double done) {
+        setEarthTotal(total);
+        earthDone = Double.isFinite(done) ? Math.max(0, Math.min(earthTotal, done)) : 0;
+    }
+
+    /**
+     * The share of the earthworks paid for, 1 for a road without any.
+     */
+    public double levelledShare() {
+        return earthTotal <= 0 ? 1.0 : Math.min(1.0, earthDone / earthTotal);
+    }
+
+    /**
+     * Items counted for the embankments of the road from what it digs, by item id.
+     */
+    public Map<String, Integer> credit() {
+        return Collections.unmodifiableMap(credit);
+    }
+
+    /**
+     * Items counted that way and not dug out yet, by item id.
+     */
+    public Map<String, Integer> owed() {
+        return Collections.unmodifiableMap(owed);
+    }
+
+    /**
+     * Counts items a column paid for will dig out: they may go into the embankments before they are dug.
+     */
+    public void addCredit(String item, int count) {
+        if (count > 0) {
+            credit.merge(item, count, Integer::sum);
+            owed.merge(item, count, Integer::sum);
+        }
+    }
+
+    /**
+     * Takes up to so many items of the credit.
+     *
+     * @return how many were taken
+     */
+    public int useCredit(String item, int count) {
+        return take(credit, item, count);
+    }
+
+    /**
+     * Something dug out of the road: what of it was owed is settled.
+     *
+     * @return how many were owed and are now settled
+     */
+    public int settleOwed(String item, int count) {
+        return take(owed, item, count);
+    }
+
+    /**
+     * Takes the credit out, to settle it when the road is done or given up.
+     */
+    public Map<String, Integer> takeCredit() {
+        Map<String, Integer> all = new LinkedHashMap<>(credit);
+        credit.clear();
+        return all;
+    }
+
+    /**
+     * Takes the debt out, to settle it when the road is done or given up.
+     */
+    public Map<String, Integer> takeOwed() {
+        Map<String, Integer> all = new LinkedHashMap<>(owed);
+        owed.clear();
+        return all;
+    }
+
+    /**
+     * Puts back the credit and the debt read from saved data.
+     */
+    public void restoreCredit(Map<String, Integer> creditValue, Map<String, Integer> owedValue) {
+        credit.clear();
+        owed.clear();
+        creditValue.forEach((item, count) -> {
+            if (count != null && count > 0) {
+                credit.put(item, count);
+            }
+        });
+        owedValue.forEach((item, count) -> {
+            if (count != null && count > 0) {
+                owed.put(item, count);
+            }
+        });
+    }
+
+    private static int take(Map<String, Integer> map, String item, int count) {
+        Integer have = map.get(item);
+        if (have == null || count <= 0) {
+            return 0;
+        }
+        int taken = Math.min(have, count);
+        if (taken >= have) {
+            map.remove(item);
+        } else {
+            map.put(item, have - taken);
+        }
+        return taken;
     }
 
     public Mode mode() {

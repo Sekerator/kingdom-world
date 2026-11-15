@@ -303,7 +303,8 @@ public final class RoadViews {
         static RoadRow decode(FriendlyByteBuf buf) {
             return new RoadRow(buf.readVarLong(), buf.readUtf(NAME), buf.readUtf(NAME), readEnum(buf, RoadClass.class), buf.readVarInt(),
                     buf.readVarInt(), buf.readVarInt(), readEnum(buf, Road.Status.class), buf.readBoolean(), buf.readBoolean(), buf.readUtf(NAME),
-                    readEnum(buf, Road.Mode.class), buf.readVarInt(), buf.readVarInt(), readInts(buf, 3));
+                    readEnum(buf, Road.Mode.class), buf.readVarInt(), buf.readVarInt(),
+                    readInts(buf, io.github.sekerator.kingdomworld.core.road.RoadLayout.Material.values().length));
         }
     }
 

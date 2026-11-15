@@ -20,6 +20,8 @@ import java.util.UUID;
 public final class Wall {
     /** Blocks of the ring in one section. */
     public static final int SECTION_CELLS = 16;
+    /** The longest ring a wall keeps, in blocks. */
+    public static final int MAX_CELLS = 8_192;
     /** Blocks of a gate on each side of its middle. */
     public static final int GATE_HALF = 1;
 
@@ -89,8 +91,8 @@ public final class Wall {
         this.dimension = Objects.requireNonNull(dimension, "dimension");
         this.centerX = centerX;
         this.centerZ = centerZ;
-        if (cells.size() < 4 || cells.size() > Road.MAX_CELLS) {
-            throw new IllegalArgumentException("A wall needs between 4 and " + Road.MAX_CELLS + " blocks, not " + cells.size());
+        if (cells.size() < 4 || cells.size() > MAX_CELLS) {
+            throw new IllegalArgumentException("A wall needs between 4 and " + MAX_CELLS + " blocks, not " + cells.size());
         }
         List<RouteCell> plain = new ArrayList<>();
         for (RouteCell cell : cells) {

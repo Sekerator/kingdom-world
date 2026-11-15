@@ -479,7 +479,8 @@ public final class RoadBuilding {
      * Whether an item stack could be used for some material of a road.
      */
     static boolean isMaterial(ItemStack stack) {
-        return stack.is(RoadBlocks.GRAVEL) || stack.is(RoadBlocks.PAVING) || stack.is(RoadBlocks.BRIDGE) || stack.is(RoadBlocks.FILL);
+        return stack.is(RoadBlocks.GRAVEL) || stack.is(RoadBlocks.PAVING) || stack.is(RoadBlocks.BRIDGE) || stack.is(RoadBlocks.FILL)
+                || stack.is(RoadBlocks.PIER) || stack.is(RoadBlocks.RAIL) || stack.is(RoadBlocks.LINING) || stack.is(RoadBlocks.LIGHT);
     }
 
     static String dimension(ServerLevel level) {

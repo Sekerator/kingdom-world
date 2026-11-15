@@ -31,6 +31,8 @@ public final class RoadState {
     private final Map<String, CityCharter> charters = new LinkedHashMap<>();
     /** Kingdoms that let the roads of another cross their land, as owner and requester. */
     private final java.util.Set<String> consents = new java.util.LinkedHashSet<>();
+    /** Kingdoms whose miners do not help with the rock of their roads. */
+    private final java.util.Set<UUID> minersOff = new java.util.LinkedHashSet<>();
     private long nextWall = 1;
     private long nextCity = 1;
     private long nextRoad = 1;
@@ -667,6 +669,7 @@ public final class RoadState {
         walls.values().removeIf(wall -> wall.kingdomId().equals(kingdomId));
         charters.values().removeIf(charter -> charter.kingdomId().equals(kingdomId));
         consents.removeIf(pair -> pair.contains(kingdomId.toString()));
+        minersOff.remove(kingdomId);
         List<Road> removed = new ArrayList<>();
         for (Road road : new ArrayList<>(roads.values())) {
             if (road.kingdomId().equals(kingdomId)) {
@@ -709,6 +712,30 @@ public final class RoadState {
 
     public long[] counters() {
         return new long[]{nextCity, nextRoad, nextCrossing, nextCamp, nextWall};
+    }
+
+    /**
+     * Whether the miners of a kingdom help with the rock of its roads; they do unless the king turned that off.
+     */
+    public boolean minersHelp(UUID kingdomId) {
+        return !minersOff.contains(kingdomId);
+    }
+
+    public void setMinersHelp(UUID kingdomId, boolean help) {
+        if (help ? minersOff.remove(kingdomId) : minersOff.add(kingdomId)) {
+            changed();
+        }
+    }
+
+    /**
+     * Kingdoms whose miners do not help with their roads.
+     */
+    public java.util.Set<UUID> minersOff() {
+        return java.util.Collections.unmodifiableSet(minersOff);
+    }
+
+    public void restoreMinersOff(UUID kingdomId) {
+        minersOff.add(kingdomId);
     }
 
     public void restoreWallCounter(long wall) {

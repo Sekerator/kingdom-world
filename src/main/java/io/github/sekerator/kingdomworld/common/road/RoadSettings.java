@@ -13,6 +13,8 @@ import java.util.List;
  */
 public final class RoadSettings {
     private static RoadRules roadOverride;
+    private static io.github.sekerator.kingdomworld.core.road.EarthRules earthOverride;
+    private static io.github.sekerator.kingdomworld.core.road.EarthRules earth;
     private static BanditRules banditOverride;
     private static RoadRules roads;
     private static BanditRules bandits;
@@ -32,6 +34,63 @@ public final class RoadSettings {
             roads = value;
         }
         return value;
+    }
+
+    /**
+     * The rules of the earthworks of levelled roads.
+     */
+    public static io.github.sekerator.kingdomworld.core.road.EarthRules earth() {
+        if (earthOverride != null) {
+            return earthOverride;
+        }
+        io.github.sekerator.kingdomworld.core.road.EarthRules value = earth;
+        if (value == null) {
+            value = earthFromConfig();
+            earth = value;
+        }
+        return value;
+    }
+
+    /**
+     * Replaces the configured earthwork rules, for game tests; {@code null} restores the config.
+     */
+    public static void overrideEarth(io.github.sekerator.kingdomworld.core.road.EarthRules rules) {
+        earthOverride = rules;
+    }
+
+    /**
+     * The earthwork rules of the config, ready to be changed by a game test.
+     */
+    public static io.github.sekerator.kingdomworld.core.road.EarthRules.Builder configuredEarth() {
+        io.github.sekerator.kingdomworld.core.road.EarthRules.Builder b = new io.github.sekerator.kingdomworld.core.road.EarthRules.Builder();
+        try {
+            KingdomWorldConfig.Roads c = KingdomWorldConfig.SERVER.roads;
+            List<? extends Integer> grades = c.maxGrade.get();
+            if (grades != null && grades.size() == 3) {
+                b.maxGrade = new int[]{grades.get(0), grades.get(1), grades.get(2)};
+            }
+            b.tunnelHeight = c.tunnelHeight.get();
+            b.digSoilSeconds = c.digSoilSeconds.get();
+            b.digRockSeconds = c.digRockSeconds.get();
+            b.rockByBuilders = c.rockByBuilders.get();
+            b.fillSeconds = c.fillSeconds.get();
+            b.bridgeSeconds = c.bridgeSeconds.get();
+            b.routeModeWeights = three(c.routeModeWeights.get(), b.routeModeWeights);
+            b.roadMinerShare = c.roadMinerShare.get();
+            b.plannerThreads = c.plannerThreads.get();
+            b.plannerMillisPerTick = c.plannerMillisPerTick.get();
+        } catch (IllegalStateException e) {
+            // The config is not loaded yet: the defaults count.
+        }
+        return b;
+    }
+
+    private static io.github.sekerator.kingdomworld.core.road.EarthRules earthFromConfig() {
+        try {
+            return configuredEarth().build();
+        } catch (IllegalArgumentException e) {
+            return io.github.sekerator.kingdomworld.core.road.EarthRules.DEFAULT;
+        }
     }
 
     /**
@@ -117,12 +176,15 @@ public final class RoadSettings {
 
     public static void refresh() {
         roads = roadsFromConfig();
+        earth = earthFromConfig();
         bandits = banditsFromConfig();
     }
 
     public static void reset() {
         roads = null;
         bandits = null;
+        earth = null;
+        earthOverride = null;
         roadOverride = null;
         banditOverride = null;
         physicalOverride = null;

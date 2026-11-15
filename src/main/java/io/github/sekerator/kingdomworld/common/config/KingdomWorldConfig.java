@@ -2143,6 +2143,17 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue searchChunksPerTick;
         public final ForgeConfigSpec.IntValue maxBridge;
         public final ForgeConfigSpec.IntValue maxFill;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> maxGrade;
+        public final ForgeConfigSpec.IntValue tunnelHeight;
+        public final ForgeConfigSpec.DoubleValue digSoilSeconds;
+        public final ForgeConfigSpec.DoubleValue digRockSeconds;
+        public final ForgeConfigSpec.DoubleValue rockByBuilders;
+        public final ForgeConfigSpec.DoubleValue fillSeconds;
+        public final ForgeConfigSpec.DoubleValue bridgeSeconds;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Double>> routeModeWeights;
+        public final ForgeConfigSpec.DoubleValue roadMinerShare;
+        public final ForgeConfigSpec.IntValue plannerThreads;
+        public final ForgeConfigSpec.IntValue plannerMillisPerTick;
         public final ForgeConfigSpec.ConfigValue<List<? extends Double>> secondsPerBlock;
         public final ForgeConfigSpec.ConfigValue<List<? extends Double>> wearPerDay;
         public final ForgeConfigSpec.DoubleValue repairShare;
@@ -2200,16 +2211,47 @@ public final class KingdomWorldConfig {
                     .defineInRange("maxRoads", r.maxRoads, 0, 1_000_000);
             npcMaxRoads = builder.comment("Roads one kingdom of the world keeps at most: the roads between the settlements of its plan;",
                     "its settlements are those of its plan, not limited by maxCities.").defineInRange("npcMaxRoads", 200, 0, 4_096);
-            maxRouteLength = builder.comment("The longest road, in blocks along its way.")
+            maxRouteLength = builder.comment("The longest road of the old search, in blocks along its way: the roads of the kingdoms of the",
+                    "world, of players in dimensions with a ceiling and of the command. The levelled roads of players are limited only by",
+                    "what a road keeps.")
                     .defineInRange("maxRouteLength", r.maxRouteLength, 16, 8_192);
-            searchStepsPerTick = builder.comment("Steps of the search for the way of a road the server makes in one tick.")
+            searchStepsPerTick = builder.comment("Steps of the old search for the way of a road the server makes in one tick.")
                     .defineInRange("searchStepsPerTick", r.nodesPerTick, 1, 100_000);
-            maxSearchSteps = builder.comment("Steps one search makes at most before it gives up.")
+            maxSearchSteps = builder.comment("Steps one old search makes at most before it gives up.")
                     .defineInRange("maxSearchSteps", r.maxNodes, 1_000, 10_000_000);
-            searchChunksPerTick = builder.comment("Chunks the search may load or read for the first time in one tick.")
+            searchChunksPerTick = builder.comment("Chunks the old search may load or read for the first time in one tick; also the chunks the",
+                    "planner of levelled roads may ask to load in one tick, all its plans together.")
                     .defineInRange("searchChunksPerTick", r.chunksPerTick, 1, 256);
-            maxBridge = builder.comment("The longest bridge or embankment, in blocks.").defineInRange("maxBridge", r.maxBridge, 0, 64);
+            maxBridge = builder.comment("The longest bridge or embankment of the old search, in blocks.")
+                    .defineInRange("maxBridge", r.maxBridge, 0, 64);
             maxFill = builder.comment("The highest embankment, in blocks; a deeper gap gets a bridge.").defineInRange("maxFill", r.maxFill, 0, 16);
+            io.github.sekerator.kingdomworld.core.road.EarthRules.Builder e = new io.github.sekerator.kingdomworld.core.road.EarthRules.Builder();
+            maxGrade = builder.comment("A levelled road climbs or falls one block in at least so many blocks, by class (1 to 8).")
+                    .defineList("maxGrade", List.of(e.maxGrade[0], e.maxGrade[1], e.maxGrade[2]),
+                            value -> value instanceof Integer number && number >= 1 && number <= 8);
+            tunnelHeight = builder.comment("Blocks of room in a tunnel of a road above its floor.")
+                    .defineInRange("tunnelHeight", e.tunnelHeight, 3, 5);
+            digSoilSeconds = builder.comment("Seconds a builder takes to dig a block of soil for a road.")
+                    .defineInRange("digSoilSeconds", e.digSoilSeconds, 0.1, 60.0);
+            digRockSeconds = builder.comment("Seconds a miner takes to dig a block of rock for a road.")
+                    .defineInRange("digRockSeconds", e.digRockSeconds, 0.1, 60.0);
+            rockByBuilders = builder.comment("How many times longer builders take for rock when no miner helps.")
+                    .defineInRange("rockByBuilders", e.rockByBuilders, 1.0, 10.0);
+            fillSeconds = builder.comment("Seconds a builder takes to put in a block of embankment or lining.")
+                    .defineInRange("fillSeconds", e.fillSeconds, 0.1, 60.0);
+            bridgeSeconds = builder.comment("Seconds a builder takes to lay a column of the deck of a bridge or a block of its pier.")
+                    .defineInRange("bridgeSeconds", e.bridgeSeconds, 0.1, 60.0);
+            routeModeWeights = builder.comment("The weight of a block of length against the work of a block of road, by way: along the land,",
+                    "moderate, straight (0 to 1000). The higher, the more earthworks the search takes on for a shorter road.")
+                    .defineList("routeModeWeights", List.of(e.routeModeWeights[0], e.routeModeWeights[1], e.routeModeWeights[2]),
+                            value -> value instanceof Double number && number >= 0.0 && number <= 1_000.0);
+            roadMinerShare = builder.comment("Share of their time miners whose post is short of its goal give to the rock of the roads;",
+                    "miners whose post has met its goal give all of it.")
+                    .defineInRange("roadMinerShare", e.roadMinerShare, 0.0, 1.0);
+            plannerThreads = builder.comment("Threads that search the ways of roads of players.")
+                    .defineInRange("plannerThreads", e.plannerThreads, 1, 4);
+            plannerMillisPerTick = builder.comment("Milliseconds of a tick the server spends copying the land the planner of roads reads.")
+                    .defineInRange("plannerMillisPerTick", e.plannerMillisPerTick, 1, 20);
             secondsPerBlock = builder.comment("Seconds a builder takes for a block of road, by class.")
                     .defineList("secondsPerBlock", List.of(r.secondsPerBlock[0], r.secondsPerBlock[1], r.secondsPerBlock[2]),
                             value -> value instanceof Double number && number >= 0.05 && number <= 600.0);

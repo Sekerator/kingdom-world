@@ -30,7 +30,10 @@ import java.util.UUID;
 /**
  * What roads are made of and how a block of road goes into the world. Materials come by item tags, so blocks of mods do
  * too: {@code kingdomworld:road_gravel}, {@code kingdomworld:road_paving}, {@code kingdomworld:road_bridge} and
- * {@code kingdomworld:road_fill}. A path needs no material: the grass becomes a path, as with a shovel.
+ * {@code kingdomworld:road_fill}; a levelled road also {@code kingdomworld:road_pier} for the piers of its bridges,
+ * {@code kingdomworld:road_rail} for their rails, {@code kingdomworld:road_lining} for its lining and
+ * {@code kingdomworld:road_light} for the torches of its tunnels. A path needs no material: the grass becomes a path, as with a
+ * shovel.
  *
  * <p>Placing never breaks what must not be broken: a protected block, a block with items or any block entity stays, and
  * the block of road is left out, its paid items going back. What the road replaces gives its drops to the storehouses.
@@ -40,6 +43,10 @@ public final class RoadBlocks {
     public static final TagKey<Item> PAVING = tag("road_paving");
     public static final TagKey<Item> BRIDGE = tag("road_bridge");
     public static final TagKey<Item> FILL = tag("road_fill");
+    public static final TagKey<Item> PIER = tag("road_pier");
+    public static final TagKey<Item> RAIL = tag("road_rail");
+    public static final TagKey<Item> LINING = tag("road_lining");
+    public static final TagKey<Item> LIGHT = tag("road_light");
 
     private RoadBlocks() {
     }
@@ -56,6 +63,10 @@ public final class RoadBlocks {
             case SURFACE -> roadClass == RoadClass.PAVED ? PAVING : GRAVEL;
             case BRIDGE -> BRIDGE;
             case FILL -> FILL;
+            case PIER -> PIER;
+            case RAIL -> RAIL;
+            case LINING -> LINING;
+            case TORCH -> LIGHT;
         };
     }
 
@@ -316,6 +327,6 @@ public final class RoadBlocks {
      * Whether a block of the middle of a road is a bridge or embankment.
      */
     static boolean raised(RouteCell cell) {
-        return cell.kind() != RouteCell.Kind.GROUND;
+        return cell.raised();
     }
 }

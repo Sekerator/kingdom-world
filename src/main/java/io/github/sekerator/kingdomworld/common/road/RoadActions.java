@@ -244,7 +244,8 @@ public final class RoadActions {
                 worn++;
             }
         }
-        int[] missing = RoadBuilding.remaining(road).getOrDefault(kingdomId, new int[3]);
+        int[] missing = RoadBuilding.remaining(road).getOrDefault(kingdomId,
+                new int[io.github.sekerator.kingdomworld.core.road.RoadLayout.Material.values().length]);
         int built = road.units() == 0 ? 1000 : (int) Math.round(1000.0 * road.paid() / road.units());
         return new RoadViews.RoadRow(road.id(), endpointName(server, road.from()), endpointName(server, road.to()), road.roadClass(), road.length(),
                 built, (int) Math.round(road.condition() * 1000), road.status(), road.paused(), road.kingdomId().equals(kingdomId),

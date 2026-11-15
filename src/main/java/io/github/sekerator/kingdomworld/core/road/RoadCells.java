@@ -139,4 +139,70 @@ public final class RoadCells {
     private static RouteCell cell(int x, int y, int z, int kind) {
         return new RouteCell(x, y, z, RouteCell.Kind.values()[kind / 256], kind % 256, null);
     }
+
+    /**
+     * The surveys of the blocks of a levelled road packed in runs of the same: four numbers a run, {@code a = soil | rock << 16},
+     * {@code b = logs | lining << 16}, {@code c = fill | (light | onRoad << 1) << 8 | pier << 16}, then how many blocks. Counts
+     * take 16 bits, an embankment 8: a deep cutting digs more rock and a tall pier takes more blocks than a byte holds.
+     */
+    public static int[] packSurveys(List<RoadLayout.ColumnSurvey> surveys) {
+        List<Integer> runs = new ArrayList<>();
+        int a = 0;
+        int b = 0;
+        int c = 0;
+        int run = 0;
+        for (RoadLayout.ColumnSurvey survey : surveys) {
+            int sa = survey.soil() | survey.rock() << 16;
+            int sb = survey.logs() | survey.lining() << 16;
+            int sc = survey.fill() | ((survey.light() ? 1 : 0) | (survey.onRoad() ? 2 : 0)) << 8 | survey.pier() << 16;
+            if (run > 0 && sa == a && sb == b && sc == c) {
+                run++;
+                continue;
+            }
+            if (run > 0) {
+                runs.add(a);
+                runs.add(b);
+                runs.add(c);
+                runs.add(run);
+            }
+            a = sa;
+            b = sb;
+            c = sc;
+            run = 1;
+        }
+        if (run > 0) {
+            runs.add(a);
+            runs.add(b);
+            runs.add(c);
+            runs.add(run);
+        }
+        return runs.stream().mapToInt(Integer::intValue).toArray();
+    }
+
+    /**
+     * The surveys again, as they were packed.
+     *
+     * @throws IllegalArgumentException when the runs are damaged
+     */
+    public static List<RoadLayout.ColumnSurvey> unpackSurveys(int[] runs) {
+        if (runs.length % 4 != 0) {
+            throw new IllegalArgumentException("the survey of a road is damaged");
+        }
+        List<RoadLayout.ColumnSurvey> surveys = new ArrayList<>();
+        for (int i = 0; i < runs.length; i += 4) {
+            int a = runs[i];
+            int b = runs[i + 1];
+            int c = runs[i + 2];
+            int run = runs[i + 3];
+            if (run <= 0 || (long) surveys.size() + run > Road.MAX_CELLS * 64L) {
+                throw new IllegalArgumentException("the survey of a road is damaged");
+            }
+            RoadLayout.ColumnSurvey survey = new RoadLayout.ColumnSurvey(a & 0xFFFF, a >>> 16, b & 0xFFFF, c & 0xFF, c >>> 16,
+                    b >>> 16, (c >> 8 & 1) != 0, (c >> 8 & 2) != 0);
+            for (int k = 0; k < run; k++) {
+                surveys.add(survey);
+            }
+        }
+        return surveys;
+    }
 }

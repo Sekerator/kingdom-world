@@ -2448,6 +2448,10 @@ public final class NpcSpawner {
             case SURFACE -> List.of("minecraft:gravel", "minecraft:stone_bricks", "minecraft:cobblestone", "minecraft:stone");
             case BRIDGE -> List.of(wood + "_planks", "minecraft:oak_planks", "minecraft:spruce_planks");
             case FILL -> List.of("minecraft:dirt", "minecraft:cobblestone");
+            // The roads of the rulers are laid on the land as it is and take none of the materials of the levelled ones.
+            case PIER, LINING -> List.of("minecraft:cobblestone", "minecraft:stone");
+            case RAIL -> List.of(wood + "_fence", "minecraft:oak_fence");
+            case TORCH -> List.of("minecraft:torch");
         };
         for (String candidate : candidates) {
             Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.tryParse(candidate));

@@ -34,7 +34,8 @@ import java.util.UUID;
  * roads: [ { id, kingdom, class, dim, from: { kind, city, kingdom?, x, z }, to, start: [x, y, z], steps: [byte], jumps: [x, y, z, ...],
  *            kinds: [kind * 256 + depth, run, ...] (format 2, see RoadCells; format 1 wrote cells: [x, y, z, kind * 256 + depth, ...]), mode,
  *            created, status, paused, traffic, sections: [ { builder, paid, placed, condition, repairing, repairPaid,
- *            pool: [ { item, count } ] } ] } ]
+ *            pool: [ { item, count } ], bw?, mw? } ], layout? (1 for a levelled road), survey?: [a, b, c, run, ...] (see RoadCells),
+ *            credit?: [ { item, count } ], owed?: [ { item, count } ], earthTotal?, earthDone? } ]
  * crossings: [ { id, road, requester, owner, mode, status, sections, created, expires } ]
  * camps: [ { id, dim, x, y, z, bandits, leader, founded, lastGrowth, built, raids, lastRaid, known: [uuid],
  *            loot: [ { item, count, data } ], structure: [pos], chest? } ]
@@ -44,10 +45,13 @@ import java.util.UUID;
  * consents: ["owner>requester"]
  * charters: [ { kingdom, city, folk?, carry?, day?, arrival?, mayor?, mayorSince?, paused?, note?, decided?, spentDay?, spent?, extent?,
  *              refused?: [ { template, until } ] } ] (a missing key is nothing yet; data written before has none)
+ * minersOff: [kingdom] (kingdoms whose miners do not help with their roads; none in data written before)
  * nextCity, nextRoad, nextCrossing, nextCamp, nextWall
  * </pre>
  */
 final class RoadNbt {
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
+
     private RoadNbt() {
     }
 
@@ -113,6 +117,11 @@ final class RoadNbt {
             }
         }
         tag.put("charters", charters);
+        ListTag minersOff = new ListTag();
+        for (UUID kingdom : state.minersOff()) {
+            minersOff.add(net.minecraft.nbt.StringTag.valueOf(kingdom.toString()));
+        }
+        tag.put("minersOff", minersOff);
         tag.putLong("nextWall", state.counters()[4]);
         long[] counters = state.counters();
         tag.putLong("nextCity", counters[0]);
@@ -174,10 +183,67 @@ final class RoadNbt {
                 pool.add(p);
             });
             s.put("pool", pool);
+            if (road.levelled()) {
+                s.putDouble("bw", section.builderWork());
+                s.putDouble("mw", section.minerWork());
+            }
             sections.add(s);
         }
         entry.put("sections", sections);
+        if (road.levelled()) {
+            entry.putInt("layout", road.layout());
+            // A block already placed needs its survey no more: written as nothing, the runs join and a file of built roads does not
+            // grow. A block paid for and not placed keeps it, its items being taken from the pool by it.
+            List<io.github.sekerator.kingdomworld.core.road.RoadLayout.ColumnSurvey> surveys = new ArrayList<>(road.units());
+            for (Road.Section section : road.sections()) {
+                List<io.github.sekerator.kingdomworld.core.road.RoadLayout.Block> blocks = road.blocksOf(section);
+                for (int i = 0; i < blocks.size(); i++) {
+                    surveys.add(i < section.placed() ? io.github.sekerator.kingdomworld.core.road.RoadLayout.ColumnSurvey.EMPTY : blocks.get(i).survey());
+                }
+            }
+            entry.putIntArray("survey", io.github.sekerator.kingdomworld.core.road.RoadCells.packSurveys(surveys));
+            entry.put("credit", writeItems(road.credit()));
+            entry.put("owed", writeItems(road.owed()));
+            entry.putDouble("earthTotal", road.earthTotal());
+            entry.putDouble("earthDone", road.earthDone());
+        }
         return entry;
+    }
+
+    private static ListTag writeItems(Map<String, Integer> items) {
+        ListTag list = new ListTag();
+        items.forEach((item, count) -> {
+            CompoundTag p = new CompoundTag();
+            p.putString("item", item);
+            p.putInt("count", count);
+            list.add(p);
+        });
+        return list;
+    }
+
+    private static Map<String, Integer> readItems(ListTag list) {
+        Map<String, Integer> items = new LinkedHashMap<>();
+        for (int j = 0; j < list.size(); j++) {
+            CompoundTag p = list.getCompound(j);
+            items.merge(p.getString("item"), Math.max(0, p.getInt("count")), Integer::sum);
+        }
+        return items;
+    }
+
+    /**
+     * The surveys of a levelled road, or {@code null} when they are missing or damaged: the road reads with empty ones, and its
+     * other blocks and the rest of the file stay readable.
+     */
+    private static List<io.github.sekerator.kingdomworld.core.road.RoadLayout.ColumnSurvey> readSurveys(CompoundTag entry) {
+        if (!entry.contains("survey", Tag.TAG_INT_ARRAY)) {
+            return null;
+        }
+        try {
+            return io.github.sekerator.kingdomworld.core.road.RoadCells.unpackSurveys(entry.getIntArray("survey"));
+        } catch (IllegalArgumentException e) {
+            LOGGER.warn("The survey of road {} is damaged and read as nothing: {}", entry.getLong("id"), e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -213,9 +279,17 @@ final class RoadNbt {
         for (int i = 0; i < sections.size(); i++) {
             builders.add(sections.getCompound(i).getUUID("builder"));
         }
+        int layout = entry.getInt("layout") == io.github.sekerator.kingdomworld.core.road.RoadLayout.LEVELLED
+                ? io.github.sekerator.kingdomworld.core.road.RoadLayout.LEVELLED : io.github.sekerator.kingdomworld.core.road.RoadLayout.LAID;
+        List<io.github.sekerator.kingdomworld.core.road.RoadLayout.ColumnSurvey> surveys = layout == io.github.sekerator.kingdomworld.core.road.RoadLayout.LEVELLED
+                ? readSurveys(entry) : null;
         Road road = new Road(entry.getLong("id"), entry.getUUID("kingdom"), roadClass, entry.getString("dim"),
                 readEndpoint(entry.getCompound("from")), readEndpoint(entry.getCompound("to")), cells, mode, entry.getLong("created"), status,
-                builders);
+                builders, layout, surveys);
+        if (road.levelled() && (surveys == null || surveys.size() != road.units())) {
+            LOGGER.warn("The survey of road {} holds {} blocks, its way makes {}: its earthworks are read as nothing", road.id(),
+                    surveys == null ? 0 : surveys.size(), road.units());
+        }
         if (sections.size() != road.sections().size()) {
             throw new IllegalArgumentException("road " + road.id() + " has " + sections.size() + " sections, its way makes "
                     + road.sections().size());
@@ -230,6 +304,11 @@ final class RoadNbt {
             }
             road.section(i).restore(s.getInt("paid"), s.getInt("placed"), s.getDouble("condition"), s.getBoolean("repairing"),
                     s.getInt("repairPaid"), pool);
+            road.section(i).restoreWork(s.getDouble("bw"), s.getDouble("mw"));
+        }
+        if (road.levelled()) {
+            road.restoreCredit(readItems(entry.getList("credit", Tag.TAG_COMPOUND)), readItems(entry.getList("owed", Tag.TAG_COMPOUND)));
+            road.restoreEarth(entry.getDouble("earthTotal"), entry.getDouble("earthDone"));
         }
         road.setPaused(entry.getBoolean("paused"));
         road.restoreTraffic(entry.getInt("traffic"));
@@ -600,6 +679,14 @@ final class RoadNbt {
                 state.putCharter(readCharter(charters.getCompound(i)));
             } catch (RuntimeException e) {
                 problems.add("city record " + i + ": " + e.getMessage());
+            }
+        }
+        ListTag minersOff = tag.getList("minersOff", Tag.TAG_STRING);
+        for (int i = 0; i < minersOff.size(); i++) {
+            try {
+                state.restoreMinersOff(UUID.fromString(minersOff.getString(i)));
+            } catch (IllegalArgumentException e) {
+                problems.add("kingdom without miners on roads " + i + ": " + e.getMessage());
             }
         }
         state.restoreWallCounter(tag.getLong("nextWall"));
