@@ -569,7 +569,17 @@ public final class WallGameTests {
         MinecraftServer server = level.getServer();
         land(helper);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Wall Neighbours", UUID.randomUUID());
-        UUID other = UUID.randomUUID();
+        for (Kingdom stale : KingdomWorldApi.kingdoms(server)) {
+            if (stale.name().equals("GameTest Wall Next Door")) {
+                KingdomWorldApi.dissolveKingdom(server, stale.id());
+            }
+        }
+        io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult created = KingdomWorldApi.createKingdom(server,
+                "GameTest Wall Next Door", UUID.randomUUID());
+        if (!(created instanceof io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult.Created neighbour)) {
+            throw new IllegalStateException("The neighbouring kingdom was not created: " + created);
+        }
+        UUID other = neighbour.kingdom().id();
         long[] otherWall = {0};
         try {
             StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 12);
@@ -612,6 +622,38 @@ public final class WallGameTests {
             helper.assertTrue(stored(server, kingdom, Items.OAK_LOG) == 0, "Logs of others reached the storehouse");
         } finally {
             RoadWork.state(server).removeWall(otherWall[0]);
+            KingdomWorldApi.dissolveKingdom(server, other);
+            finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_walls_gone", timeoutTicks = 200)
+    public static void aWallOfAKingdomThatIsGoneIsForgottenAndBuiltOver(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        land(helper);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Wall Heirs", UUID.randomUUID());
+        try {
+            City city = city(helper, kingdom);
+            BlockPos middle = helper.absolutePos(MIDDLE);
+            // The wall of a capital of a kingdom that is gone still stands in the roads on the same ring.
+            UUID gone = UUID.randomUUID();
+            long[] stale = {0};
+            RoadWork.change(server, "the wall of a kingdom that is gone", state -> {
+                Wall old = new Wall(state.nextWallId(), 0, gone, Wall.WallClass.STONE, Dimensions.id(helper.getLevel()), middle.getX(), middle.getZ(),
+                        ring(middle.getX(), middle.getZ(), 4, middle.getY()), List.of(), 0);
+                state.putWall(old);
+                stale[0] = old.id();
+                return Outcome.DONE;
+            });
+            Wall wall = build(helper, kingdom, city, Wall.WallClass.PALISADE, Wall.FOLLOW_GROUND);
+            int north = (int) wall.cells().stream().filter(cell -> cell.z() == middle.getZ() - 4).count();
+            // The throne of the kingdom stands on one corner of it.
+            helper.assertTrue(north >= 7, "The new ring left out the cells of the wall of a kingdom that is gone: " + north + " on the north side");
+            RoadWork.keepInStep(server, RoadWork.state(server), KingdomWorldApi.state(server));
+            helper.assertTrue(RoadWork.state(server).wall(stale[0]).isEmpty(), "The wall of a kingdom that is gone is still kept");
+            helper.assertTrue(RoadWork.state(server).wall(wall.id()).isPresent(), "The wall of a kingdom standing was forgotten");
+        } finally {
             finish(helper, kingdom);
         }
         helper.succeed();

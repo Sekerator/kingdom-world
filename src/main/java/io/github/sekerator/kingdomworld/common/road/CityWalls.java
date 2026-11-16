@@ -536,7 +536,8 @@ public final class CityWalls {
         Optional<Wall> old = roads.wallOf(cityId, kingdomId);
         List<Wall> others = new ArrayList<>();
         for (Wall wall : roads.walls()) {
-            if (wall.dimension().equals(place.dimension())) {
+            // The wall of a kingdom that is gone, not forgotten yet, is nobody's: the new ring takes its place.
+            if (wall.dimension().equals(place.dimension()) && KingdomWorldApi.kingdom(server, wall.kingdomId()).isPresent()) {
                 others.add(wall);
             }
         }

@@ -408,11 +408,12 @@ final class WallEarthworks {
     }
 
     /**
-     * Whether a block belongs to another wall of the dimension, of whatever kingdom: placed by it or taken over by it.
+     * Whether a block belongs to another wall of the dimension, of whatever kingdom still standing: placed by it or taken over by it.
      */
     private static boolean anyWall(MinecraftServer server, Wall wall, long at) {
         for (Wall other : RoadWork.state(server).walls()) {
-            if (other != wall && other.dimension().equals(wall.dimension()) && (other.placedHere(at) || other.replaces(at))) {
+            if (other != wall && other.dimension().equals(wall.dimension()) && (other.placedHere(at) || other.replaces(at))
+                    && KingdomWorldApi.kingdom(server, other.kingdomId()).isPresent()) {
                 return true;
             }
         }

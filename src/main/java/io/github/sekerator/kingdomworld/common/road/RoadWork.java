@@ -317,9 +317,11 @@ public final class RoadWork {
     /**
      * Forgets kingdoms that are gone.
      */
-    static void keepInStep(MinecraftServer server, RoadState roads, KingdomWorldState world) {
+    public static void keepInStep(MinecraftServer server, RoadState roads, KingdomWorldState world) {
         Set<UUID> kingdoms = new HashSet<>();
         roads.cities().forEach(city -> kingdoms.add(city.kingdomId()));
+        // The wall of the capital of a kingdom that is gone, with no city or road of it left, goes too.
+        roads.walls().forEach(wall -> kingdoms.add(wall.kingdomId()));
         // A kingdom with no city but its capital may still keep townsfolk there.
         roads.charters().forEach(charter -> kingdoms.add(charter.kingdomId()));
         roads.roads().forEach(road -> kingdoms.addAll(road.builders()));
