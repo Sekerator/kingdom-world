@@ -1295,7 +1295,9 @@ public final class GuardArmyGameTests {
             for (int i = 0; i < 5; i++) {
                 helper.assertTrue(CitizenLife.arrive(server, id, place, false).isPresent(), "No newcomer arrived");
             }
-            fund(helper, kingdom, 5_000_000L);
+            // A rich ruler buys the kits of all: the treasury pays a month of upkeep, and the kits bought count in the upkeep, here
+            // for both days of the test on one day of the game.
+            fund(helper, kingdom, 10_000_000L);
             army.setStaffDay(id, ArmyWork.day(server) - 1);
             io.github.sekerator.kingdomworld.common.npc.NpcGarrison.daily(server, id);
             int after = army.soldiersOf(id).size();
@@ -1309,7 +1311,10 @@ public final class GuardArmyGameTests {
             helper.assertTrue(army.soldiersOf(id).size() == after + perDay, "The ranks did not grow the next day");
             for (Soldier soldier : army.soldiersOf(id)) {
                 helper.assertTrue(army.squadOf(soldier.citizenId()).flatMap(squad -> army.duty(squad.id())).isPresent(), "A recruit has no post");
-                helper.assertTrue(ArmyKits.isIssued(ArmyWork.hands(server, soldier.citizenId()).get(EquipmentSlot.CHEST)), "A soldier has no kit");
+                helper.assertTrue(ArmyKits.isIssued(ArmyWork.hands(server, soldier.citizenId()).get(EquipmentSlot.CHEST)), "A soldier has no kit: the treasury holds "
+                        + io.github.sekerator.kingdomworld.common.npc.RulerPurse.funds(server, id) + " for "
+                        + io.github.sekerator.kingdomworld.common.npc.RulerPurse.keepDays(server, id) + " days of an upkeep of "
+                        + io.github.sekerator.kingdomworld.common.npc.RulerPurse.upkeep(server, id));
             }
             helper.assertTrue(army.squadOfDuty(id, "palace_hall").isPresent(), "The recruits did not take the post at the throne");
         } finally {
