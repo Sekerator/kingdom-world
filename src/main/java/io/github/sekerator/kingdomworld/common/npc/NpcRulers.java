@@ -95,6 +95,7 @@ public final class NpcRulers {
         RulerActions.resetSupply();
         DUE.clear();
         LAST_VIEWS.clear();
+        STRIKES.clear();
         job = null;
         campJob = null;
         turning = null;
@@ -598,8 +599,11 @@ public final class NpcRulers {
         return plan;
     }
 
-    /** Regular deals that failed the review of the ruler at its last turns, by deal id: two in a row end the deal. */
-    private static final Map<Long, Integer> STRIKES = new ConcurrentHashMap<>();
+    /**
+     * Regular deals that failed the review of a ruler at its last turns, by ruler and deal id: two in a row end the deal. Each
+     * ruler counts its own, so that the two rulers of a deal between kingdoms of the world do not add up or undo each other.
+     */
+    private static final Map<UUID, Map<Long, Integer>> STRIKES = new ConcurrentHashMap<>();
 
     /**
      * The ruler looks at its regular deals under way: one that no longer pays (it drains goods the kingdom wants, or costs more
@@ -608,10 +612,13 @@ public final class NpcRulers {
     static void review(MinecraftServer server, UUID id, RulerView view, RulerMemory memory) {
         KingdomWorldState world = KingdomWorldApi.state(server);
         var prices = io.github.sekerator.kingdomworld.common.economy.ItemPrices.table(server);
+        Map<Long, Integer> strikes = STRIKES.computeIfAbsent(id, key -> new ConcurrentHashMap<>());
+        java.util.Set<Long> underWay = new java.util.HashSet<>();
         for (Deal deal : world.trade().dealsOf(id)) {
             if (deal.status() != Deal.Status.ACTIVE || deal.periodDays() <= 0) {
                 continue;
             }
+            underWay.add(deal.id());
             UUID partner = deal.partnerOf(id);
             boolean weSell = id.equals(deal.seller());
             long price = deal.currency().equals(id) ? deal.price()
@@ -625,17 +632,21 @@ public final class NpcRulers {
                     price, worth, free, good == null || good.stock() > 4 * Math.max(1, good.want()) + deal.count() ? 0
                     : Math.max(1, good.shortage()), deal.periodDays());
             if (RulerMind.keeps(offer, view, memory, NpcSettings.rulers())) {
-                STRIKES.remove(deal.id());
+                strikes.remove(deal.id());
                 continue;
             }
-            int strikes = STRIKES.merge(deal.id(), 1, Integer::sum);
-            if (strikes >= 2) {
-                STRIKES.remove(deal.id());
+            if (strikes.merge(deal.id(), 1, Integer::sum) >= 2) {
+                strikes.remove(deal.id());
                 Outcome cancelled = KingdomWorldApi.change(server, "call off a regular deal of a kingdom of the world",
                         state -> state.cancelDeal(null, id, deal.id()));
                 LOGGER.info("The ruler of {} called off the regular deal {} of {} x {} with {}: {}", kingdomName(server, id), deal.id(),
                         deal.count(), deal.item(), kingdomName(server, partner), cancelled.ok() ? "it no longer pays" : cancelled.error());
             }
+        }
+        // A deal that ended, was called off by the partner or went away since is forgotten with its strikes.
+        strikes.keySet().retainAll(underWay);
+        if (strikes.isEmpty()) {
+            STRIKES.remove(id);
         }
     }
 
