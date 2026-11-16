@@ -593,6 +593,9 @@ public final class WallGameTests {
             BlockPos beam = helper.absolutePos(new BlockPos(8, 3, 2));
             level.setBlockAndUpdate(beam, Blocks.OAK_LOG.defaultBlockState().setValue(net.minecraft.world.level.block.RotatedPillarBlock.AXIS,
                     net.minecraft.core.Direction.Axis.X));
+            // A log of a player stands upright over the air on the other side: no tree holds it, so it was put there.
+            BlockPos hanging = helper.absolutePos(new BlockPos(4, 3, 2));
+            level.setBlockAndUpdate(hanging, Blocks.OAK_LOG.defaultBlockState());
             RoadWork.change(server, "a wall of another kingdom", state -> {
                 Wall theirs = new Wall(state.nextWallId(), 0, other, Wall.WallClass.PALISADE, Dimensions.id(level), palisade.getX() + 200,
                         palisade.getZ(), ring(palisade.getX() + 200, palisade.getZ(), 4, palisade.getY() - 1), List.of(), 0);
@@ -609,6 +612,7 @@ public final class WallGameTests {
             helper.assertTrue(level.getBlockState(palisade).is(Blocks.OAK_LOG) && level.getBlockState(palisade.above()).is(Blocks.OAK_LOG),
                     "The palisade of another kingdom was taken down");
             helper.assertTrue(level.getBlockState(beam).is(Blocks.OAK_LOG), "The beam of a player was taken down");
+            helper.assertTrue(level.getBlockState(hanging).is(Blocks.OAK_LOG), "The upright log hanging over the air was taken down");
             helper.assertTrue(CityWalls.blockedInWay(wall.id()), "The blocks of others in the way were not noted");
             // Around them the wall stands whole.
             helper.assertTrue(level.getBlockState(palisade.above(2)).is(Blocks.SPRUCE_LOG) && level.getBlockState(palisade.above(3)).is(Blocks.SPRUCE_LOG),
@@ -618,12 +622,136 @@ public final class WallGameTests {
                 if (!at.equals(beam)) {
                     helper.assertTrue(level.getBlockState(at).is(Blocks.SPRUCE_LOG), "A gap around the beam at " + at);
                 }
+                BlockPos by = new BlockPos(hanging.getX(), y + up, hanging.getZ());
+                if (!by.equals(hanging)) {
+                    helper.assertTrue(level.getBlockState(by).is(Blocks.SPRUCE_LOG), "A gap around the hanging log at " + by);
+                }
             }
             helper.assertTrue(stored(server, kingdom, Items.OAK_LOG) == 0, "Logs of others reached the storehouse");
         } finally {
             RoadWork.state(server).removeWall(otherWall[0]);
             KingdomWorldApi.dissolveKingdom(server, other);
             finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_walls_border", timeoutTicks = 200)
+    public static void theEarthworksOfAWallTouchNoLandOfAnotherKingdom(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        String dimension = Dimensions.id(level);
+        int y = helper.absolutePos(BlockPos.ZERO).getY();
+        // The city stands on the border of the chunk of the throne and the next one east, which another kingdom takes once the
+        // wall is laid out, as a war takes land.
+        int border = ((helper.absolutePos(new BlockPos(2, 0, 2)).getX() >> 4) + 1) << 4;
+        int middle = border - helper.absolutePos(BlockPos.ZERO).getX();
+        int west = Math.min(-1, middle - 7);
+        BlockPos from = helper.absolutePos(new BlockPos(west, -3, 0));
+        BlockPos to = helper.absolutePos(new BlockPos(middle + 7, 8, 15));
+        TestChunks.hold(level, from, to);
+        GatheringGameTests.clear(level, from, to);
+        BlockPos skyTo = helper.absolutePos(new BlockPos(middle + 6, 0, 14));
+        GatheringGameTests.clear(level, helper.absolutePos(new BlockPos(middle - 6, 9, 2)),
+                new BlockPos(skyTo.getX(), level.getMaxBuildHeight() - 1, skyTo.getZ()));
+        for (int x = west; x <= middle + 7; x++) {
+            for (int z = 0; z <= 15; z++) {
+                for (int down = -3; down < 0; down++) {
+                    helper.setBlock(new BlockPos(x, down, z), Blocks.STONE);
+                }
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.GRASS_BLOCK);
+            }
+        }
+        RoadRules.Builder rules = RoadSettings.configuredRoads();
+        rules.wallRadius = 4;
+        rules.townPeople = 50;
+        rules.cityPeople = 100;
+        RoadSettings.override(rules.build(), null);
+        for (Kingdom stale : KingdomWorldApi.kingdoms(server)) {
+            if (stale.name().equals("GameTest Wall Over The Border")) {
+                KingdomWorldApi.dissolveKingdom(server, stale.id());
+            }
+        }
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Wall Border", UUID.randomUUID());
+        io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult created = KingdomWorldApi.createKingdom(server,
+                "GameTest Wall Over The Border", UUID.randomUUID());
+        if (!(created instanceof io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult.Created neighbour)) {
+            throw new IllegalStateException("The neighbouring kingdom was not created: " + created);
+        }
+        UUID other = neighbour.kingdom().id();
+        var territory = KingdomWorldApi.state(server).territory();
+        try {
+            // All the land around the city is the kingdom's while the wall is laid out.
+            List<Long> east = new ArrayList<>();
+            for (int cx = from.getX() >> 4; cx <= to.getX() >> 4; cx++) {
+                for (int cz = from.getZ() >> 4; cz <= to.getZ() >> 4; cz++) {
+                    long key = io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(cx, cz);
+                    UUID owner = territory.ownerOf(dimension, key);
+                    if (owner != null && !owner.equals(kingdom.id())) {
+                        KingdomWorldApi.dissolveKingdom(server, owner);
+                    }
+                    if (!kingdom.id().equals(territory.ownerOf(dimension, key))) {
+                        territory.assign(kingdom.id(), key);
+                    }
+                    if (cx == border >> 4) {
+                        east.add(key);
+                    }
+                }
+            }
+            StorehouseInventory store = CitizenGameTests.storehouse(helper, middle - 2, 0, 11);
+            store.insertItem(0, new ItemStack(Items.OAK_LOG, 64), false);
+            store.insertItem(1, new ItemStack(Items.OAK_LOG, 64), false);
+            store.insertItem(2, new ItemStack(Items.DIRT, 64), false);
+            store.insertItem(3, new ItemStack(Items.DIRT, 64), false);
+            BlockPos center = helper.absolutePos(new BlockPos(middle, 0, 8));
+            City city = RoadWork.state(server).addCity(kingdom.id(), "GameTest Border Town", dimension, center.getX(), center.getY(),
+                    center.getZ(), 1);
+            int base = y + 2;
+            Wall wall = build(helper, kingdom, city, Wall.WallClass.PALISADE, base);
+            // The east half goes to the other kingdom.
+            for (long key : east) {
+                territory.release(kingdom.id(), key);
+            }
+            territory.establish(other, new io.github.sekerator.kingdomworld.core.territory.Capital(dimension, border + 1, y,
+                    (io.github.sekerator.kingdomworld.core.territory.ChunkKey.z(east.get(0)) << 4) + 1), east);
+            // A hole under a column on either side, and earth in the place of a column on either side.
+            for (int x : new int[]{middle - 4, middle + 4}) {
+                helper.setBlock(new BlockPos(x, 0, 10), Blocks.AIR);
+                helper.setBlock(new BlockPos(x, -1, 10), Blocks.AIR);
+                helper.setBlock(new BlockPos(x, 3, 6), Blocks.DIRT);
+            }
+            payAndPlace(helper, wall);
+            helper.assertTrue(!helper.getBlockState(new BlockPos(middle - 4, -1, 10)).isAir()
+                    && !helper.getBlockState(new BlockPos(middle - 4, 1, 10)).isAir(), "The hole under the wall on the own land was not filled");
+            helper.assertTrue(helper.getBlockState(new BlockPos(middle + 4, -1, 10)).isAir()
+                    && helper.getBlockState(new BlockPos(middle + 4, 0, 10)).isAir(), "The hole on the land of another kingdom was filled");
+            for (int z = 5; z <= 11; z++) {
+                helper.assertTrue(!helper.getBlockState(new BlockPos(middle - 4, 1, z)).isAir(), "No earth under the wall on the own land at " + z);
+                net.minecraft.world.level.block.state.BlockState foreign = helper.getBlockState(new BlockPos(middle + 4, 1, z));
+                helper.assertTrue(foreign.isAir() || foreign.is(BlockTags.LOGS), "Earth was filled in on the land of another kingdom at " + z + ": " + foreign);
+            }
+            helper.assertTrue(helper.getBlockState(new BlockPos(middle - 4, 3, 6)).is(BlockTags.LOGS), "The earth in the place of the wall on the own land stayed");
+            helper.assertTrue(helper.getBlockState(new BlockPos(middle + 4, 3, 6)).is(Blocks.DIRT), "The earth on the land of another kingdom was cut");
+            // A gate in the west side over a pit inside: the ramp in goes down to the pit on the own land and stops at the border.
+            for (int x = middle - 3; x <= middle + 3; x++) {
+                for (int z = 7; z <= 9; z++) {
+                    for (int down = -3; down <= 0; down++) {
+                        helper.setBlock(new BlockPos(x, down, z), Blocks.AIR);
+                    }
+                    helper.setBlock(new BlockPos(x, -4, z), Blocks.STONE);
+                }
+            }
+            BlockPos gate = helper.absolutePos(new BlockPos(middle - 4, 0, 8));
+            helper.assertTrue(CityWalls.gateAt(server, null, wall.id(), gate.getX(), gate.getZ()).ok(), "No gate cut");
+            helper.assertTrue(!helper.getBlockState(new BlockPos(middle - 1, -2, 8)).isAir(), "The ramp of the gate did not go down to the pit on the own land");
+            for (int x = middle; x <= middle + 3; x++) {
+                helper.assertTrue(helper.getBlockState(new BlockPos(x, -3, 8)).isAir(), "The ramp of the gate went on to the land of another kingdom at " + x);
+            }
+        } finally {
+            KingdomWorldApi.dissolveKingdom(server, other);
+            finish(helper, kingdom);
+            GatheringGameTests.clear(level, from, to);
+            TestChunks.release(level, from);
         }
         helper.succeed();
     }
