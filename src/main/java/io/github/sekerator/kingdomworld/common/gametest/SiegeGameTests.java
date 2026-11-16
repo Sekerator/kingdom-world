@@ -128,6 +128,24 @@ public final class SiegeGameTests {
                 .orElseThrow(() -> new IllegalStateException("No squad was formed"));
     }
 
+    /**
+     * Where the soldier and the bodies near a gate stand, for the message of a failed check.
+     */
+    private static String near(GameTestHelper helper, CitizenEntity soldier, Kingdom home, Kingdom enemy, BlockPos gate) {
+        BlockPos origin = helper.absolutePos(BlockPos.ZERO);
+        StringBuilder near = new StringBuilder("the soldier is ").append(soldier.isRemoved() ? "gone"
+                : "at " + soldier.blockPosition().subtract(origin).toShortString()).append(" alive ").append(soldier.isAlive())
+                .append(" added ").append(soldier.isAddedToWorld()).append(" known ").append(helper.getLevel().getEntity(soldier.getId()) == soldier)
+                .append(" ticking ").append(helper.getLevel().isPositionEntityTicking(soldier.blockPosition())).append(" gate at ")
+                .append(gate.subtract(origin).toShortString()).append(", bodies near:");
+        for (CitizenEntity body : helper.getLevel().getEntitiesOfClass(CitizenEntity.class, new AABB(gate).inflate(24, 6, 24))) {
+            UUID of = body.kingdomId();
+            near.append(' ').append(home.id().equals(of) ? "besieger" : enemy.id().equals(of) ? "own" : String.valueOf(of)).append(" at ")
+                    .append(body.blockPosition().subtract(origin).toShortString()).append(body.isAlive() ? "" : " dead");
+        }
+        return near.toString();
+    }
+
     private static CitizenEntity body(GameTestHelper helper, Citizen citizen, double x, double z) {
         MinecraftServer server = helper.getLevel().getServer();
         CitizenBodies.force(citizen.id(), true);
@@ -300,6 +318,19 @@ public final class SiegeGameTests {
 
     @GameTest(template = EMPTY, batch = "kingdomworld_siege_gate", timeoutTicks = 200)
     public static void gatesCloseBeforeEnemiesOpenBeforeTheirOwnAndFallToSoldiersWithARam(GameTestHelper helper) {
+        // The soldiers stand up to twelve blocks out of the place of the test: a chunk there that ticks no entities would take a
+        // body out of the world or make it anew at the gate, so the chunks around are held and the test starts once they tick.
+        BlockPos origin = helper.absolutePos(BlockPos.ZERO);
+        TestChunks.hold(helper.getLevel(), origin.offset(-16, 0, -16), origin.offset(21, 0, 21));
+        List<BlockPos> places = List.of(origin, origin.offset(2, 1, -12), origin.offset(2, 1, -2), origin.offset(2, 1, 3));
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(places.stream().allMatch(helper.getLevel()::isPositionEntityTicking),
+                        "The chunks around the gate do not tick entities"))
+                .thenExecute(() -> gates(helper))
+                .thenSucceed();
+    }
+
+    private static void gates(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         Kingdom[] both = WarGameTests.kingdoms(helper, "Siege Gate", UUID.randomUUID(), UUID.randomUUID());
@@ -329,15 +360,20 @@ public final class SiegeGameTests {
                     leaves.get(SiegeGates.MIDDLE).getZ() + 3)));
             CitizenEntity soldier = body(helper, attacker, 2.5, -2.0);
             CitizenEntity keeper = body(helper, gatekeeper, 2.5, 1.5);
+            // Making the body of the keeper may make the body of the soldier anew at the point of its siege by the gate: the
+            // body standing now is the one moved.
+            soldier = CitizenBodies.body(attacker.id());
+            helper.assertTrue(soldier != null, "The soldier lost its body");
             // An enemy soldier near and one of their own right at the gate: the gate opens for its own.
             soldier.moveTo(soldier.getX(), soldier.getY(), helper.absolutePos(BlockPos.ZERO).getZ() - 12.0, 0, 0);
             SiegeWork.forceGates(server);
             Gate gate = SiegeWork.state(server).gate(wallId, 2).orElseThrow();
-            helper.assertTrue(!gate.closed(), "The gate did not open for its own while the enemy was not at it");
+            helper.assertTrue(!gate.closed(), "The gate did not open for its own while the enemy was not at it; " + near(helper, soldier, home, enemy,
+                    leaves.get(SiegeGates.MIDDLE)));
             keeper.discard();
             SiegeWork.forceGates(server);
             helper.assertTrue(gate.closed() && !level.getBlockState(leaves.get(SiegeGates.MIDDLE)).getValue(FenceGateBlock.OPEN),
-                    "The gate did not close before an enemy");
+                    "The gate did not close before an enemy; " + near(helper, soldier, home, enemy, leaves.get(SiegeGates.MIDDLE)));
             // The soldier comes to the gate with a ram of the siege: 1 a second and 3 for the ram, the leaves hold 12.
             SiegeWork.state(server).startSiege(new Siege(war.id(), home.id(), enemy.id(), 0, Dimensions.id(level), leaves.get(SiegeGates.MIDDLE).getX(),
                     leaves.get(SiegeGates.MIDDLE).getY(), leaves.get(SiegeGates.MIDDLE).getZ(), 0, 1, false));
@@ -363,8 +399,8 @@ public final class SiegeGameTests {
                 item.discard();
             }
             finish(helper, home, List.of(enemy), List.of(), List.of(wallId), attacker, gatekeeper);
+            TestChunks.release(level, helper.absolutePos(BlockPos.ZERO).offset(-16, 0, -16));
         }
-        helper.succeed();
     }
 
     // ---------------------------------------------------------------- holds
