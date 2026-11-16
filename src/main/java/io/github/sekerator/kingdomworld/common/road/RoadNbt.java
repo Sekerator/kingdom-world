@@ -333,6 +333,9 @@ final class RoadNbt {
         }
         entry.putIntArray("cells", cells);
         entry.putIntArray("gates", wall.gates().stream().mapToInt(Integer::intValue).toArray());
+        if (!wall.opening().isEmpty()) {
+            entry.putIntArray("opening", wall.opening().stream().mapToInt(Integer::intValue).toArray());
+        }
         entry.putLong("created", wall.created());
         entry.putLong("building", wall.buildingId());
         entry.putLongArray("placed", wall.placedBlocks());
@@ -390,6 +393,9 @@ final class RoadNbt {
         wall.setBuildingId(entry.getLong("building"));
         wall.restorePlaced(entry.getLongArray("placed"));
         wall.restoreReplaced(entry.getLongArray("replaced"));
+        for (int gate : entry.getIntArray("opening")) {
+            wall.awaitOpening(gate);
+        }
         CompoundTag spoil = entry.getCompound("spoil");
         for (String item : spoil.getAllKeys()) {
             wall.addSpoil(item, spoil.getInt(item));

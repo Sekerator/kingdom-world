@@ -79,6 +79,8 @@ public final class Wall {
     private final int centerZ;
     private final List<RouteCell> cells;
     private final TreeSet<Integer> gates = new TreeSet<>();
+    /** Gates cut while a part of their place was not loaded, whose blocks come down once it is; kept with the wall. */
+    private final TreeSet<Integer> opening = new TreeSet<>();
     private final List<Road.Section> sections = new ArrayList<>();
     private final List<Block> blocks = new ArrayList<>();
     private final long created;
@@ -366,6 +368,31 @@ public final class Wall {
 
     public List<Integer> gates() {
         return List.copyOf(gates);
+    }
+
+    /**
+     * Notes a gate whose blocks wait for its place to be loaded to come down.
+     */
+    public void awaitOpening(int gate) {
+        if (gate >= 0 && gate < cells.size()) {
+            opening.add(gate);
+        }
+    }
+
+    /**
+     * The gates whose blocks wait for their place to be loaded to come down.
+     */
+    public List<Integer> opening() {
+        return List.copyOf(opening);
+    }
+
+    /**
+     * A gate waits no more for its place.
+     *
+     * @return whether it waited
+     */
+    public boolean opened(int gate) {
+        return opening.remove(gate);
     }
 
     /**

@@ -109,7 +109,6 @@ public final class CityWalls {
         LAST.clear();
         FROM.clear();
         LAYOUTS.clear();
-        PENDING.clear();
         seconds = 0;
         CityAreas.reset();
         WallEarthworks.reset();
@@ -759,9 +758,6 @@ public final class CityWalls {
         return outcome.ok();
     }
 
-    /** Gates cut while a part of their wall was not loaded: {wall, cell}, opened once it is. */
-    private static final java.util.Set<String> PENDING = new java.util.LinkedHashSet<>();
-
     /**
      * Cuts a gate into a wall where its ring passes nearest a place, for a road of a settlement or a gate of its plan; what the
      * wall placed there already is taken away now, or as soon as its chunk is loaded.
@@ -835,14 +831,16 @@ public final class CityWalls {
     }
 
     /**
-     * Opens the blocks of a gate whose place is loaded now, or waits for it.
+     * Opens the blocks of a gate whose place is loaded now, or notes in the wall that it waits for it, so that a restart in
+     * between does not leave the gate shut.
      */
     private static void open(MinecraftServer server, Wall wall, int cell) {
         ServerLevel level = ConstructionWork.level(server, wall.dimension());
         if (level != null && gateLoaded(level, wall, cell)) {
             openGate(level, wall, cell);
         } else {
-            PENDING.add(wall.id() + "/" + cell);
+            wall.awaitOpening(cell);
+            RoadWork.state(server).changed();
         }
     }
 
@@ -904,22 +902,24 @@ public final class CityWalls {
      * Opens the gates that waited for their place to be loaded.
      */
     private static void openPending(MinecraftServer server) {
-        if (PENDING.isEmpty()) {
-            return;
-        }
         RoadState roads = RoadWork.state(server);
-        for (java.util.Iterator<String> it = PENDING.iterator(); it.hasNext(); ) {
-            String[] parts = it.next().split("/");
-            Optional<Wall> wall = roads.wall(Long.parseLong(parts[0]));
-            int cell = Integer.parseInt(parts[1]);
-            if (wall.isEmpty() || cell >= wall.get().cells().size()) {
-                it.remove();
+        for (Wall wall : roads.walls()) {
+            if (wall.opening().isEmpty()) {
                 continue;
             }
-            ServerLevel level = ConstructionWork.level(server, wall.get().dimension());
-            if (level != null && gateLoaded(level, wall.get(), cell)) {
-                openGate(level, wall.get(), cell);
-                it.remove();
+            ServerLevel level = ConstructionWork.level(server, wall.dimension());
+            if (level == null) {
+                continue;
+            }
+            for (int cell : wall.opening()) {
+                if (!wall.inGate(cell)) {
+                    wall.opened(cell);
+                    roads.changed();
+                } else if (gateLoaded(level, wall, cell)) {
+                    openGate(level, wall, cell);
+                    wall.opened(cell);
+                    roads.changed();
+                }
             }
         }
     }
