@@ -4,6 +4,8 @@
 
 ### 1.6.3
 
+Главное в 1.6.3: стены встают на землю и заменяют старую стену, ворота ставятся там, где стоишь, а окно своего королевства открывается издалека; у стены можно выбрать высоту основания с засыпкой землёй; выравнивание у стены даёт ровный пол; пустые столицы королевств мира достраиваются сами при запуске сервера; короли мира богаты с самого начала и ведут деньги и войны с расчётом; меньше заминок на загруженном сервере. Сетевой протокол 71: клиент и сервер должны быть одной версии мода.
+
 Исправления стройки, работников, стен и дорог. Короли мира богаты с самого начала и ведут дела с умом: считают казну в днях содержания, вывозят то, что копится, ввозят только нужное, сами ставят недостающие мастерские, взвешивают сделки, держат войско по богатству и угрозе, начинают войны по расчёту и просят мира, когда проигрывают. Сетевой протокол прежний (70).
 
 - **Исправлено: столицы мира без домов.** Если столицу, которая строилась в фоне, откладывали ради поселения и вскоре запускали снова, её земля выгружалась посреди стройки, и все оставшиеся дома пропускались: в столице были трон, площадь, стена и жители, но не было города. Теперь здание, под которым нет загруженной земли, ждёт её, а столица снова просит свои чанки. Когда последний дом поставлен, каждое здание плана сверяется с реестром, и недостающие строятся заново. То же у городов столицы и у поселений.
@@ -387,6 +389,8 @@
 ## English
 
 ### 1.6.3
+
+The main of 1.6.3: walls stand on the ground and replace an old wall, a gate is cut where you stand and the window of your own kingdom opens from afar; a wall can be laid at a chosen base height with earth filled in below; levelling beside a wall gives a flat floor; empty capitals of kingdoms of the world are finished by themselves when the server starts; kings of the world are rich from the start and handle money and war with reckoning; fewer stutters on a busy server. Network protocol 71: client and server must run the same version of the mod.
 
 Fixes of construction, workers, walls and roads. Kings of the world are rich from the start and run their affairs wisely: they count their treasury in days of upkeep, export what heaps up, import only what they need, set up the workshops they lack, weigh their deals, keep an army by their wealth and the dangers around them, start wars by reckoning and ask for peace when they lose. The network protocol is unchanged (70).
 
