@@ -9,8 +9,8 @@ finished building enters the register of the kingdom and starts to serve it with
 
 ### Where to start
 
-1. You need citizens. While the kingdom has no working house, any bed on its land is a home, and that is how the first
-   citizens come (see [Arrival and growth](growth)).
+1. You need citizens. Any bed on the kingdom's land is a home, and that is how the first citizens come (see [Arrival and
+   growth](growth)).
 2. Place a [work post](work_posts) {item:kingdomworld:work_post}, give it the profession Builder and hire a worker (see [Builders and materials](builders)).
 3. Put materials in the storehouses: planks, logs, cobblestone, glass.
 4. In the Construction tab choose a building and press Take blueprint (see [Blueprints and the catalog](blueprints)).
@@ -306,8 +306,8 @@ server checks integrity a little at a time in loaded places; a building not look
 | Tavern | 12 citizens an evening |
 
 - **House.** Its beds are homes; a homeless citizen gets a bed in a house first, and residents get comfort. A free bed
-  in a house brings newcomers a quarter sooner. Mind this: once the first house of a kingdom works, new beds outside
-  buildings no longer become homes (whoever already lives in one stays). Beds of a tavern are never homes.
+  in a house brings newcomers a quarter sooner. Beds outside buildings stay homes after the first house too, but
+  the free beds of houses are taken first. Beds of a tavern are never homes.
 - **Warehouse.** Chests, barrels, crates and shulker boxes inside (the tag kingdomworld:warehouse_containers and blocks
   whose names end in chest, barrel, crate, shulker_box) count as storehouses of the kingdom while the place is loaded.
   [Storehouse](storehouses) blocks count always.

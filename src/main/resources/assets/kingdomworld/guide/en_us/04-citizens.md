@@ -36,7 +36,7 @@ The newcomer appears at the town hall of its city (at the throne in the capital)
 
 ### Which beds will do
 
-A home is a bed on the kingdom's land, one per citizen. While the kingdom has no working house at all, any bed on its land will do: that is how a new kingdom gets its first citizens. Once there are houses, newcomers live only in beds of buildings: a house, a barracks, a mage tower, a building without a role (see [The roles of buildings](building_roles)). A free bed in a house also brings newcomers a quarter sooner. The beds of a tavern are rooms for guests, and a bed a player sleeps in as the point of return is nobody's home: a citizen living there goes to find another. A broken bed, or a bed on land given up, frees its resident, who looks for a new one.
+A home is a bed on the kingdom's land, one per citizen. Any bed on its land outside the buildings will do, in a house you built yourself too, and inside the buildings a bed of a working house, a barracks, a mage tower or a building without a role (see [The roles of buildings](building_roles)). Newcomers take the free beds of houses first, and a free bed in a house also brings them a quarter sooner. The beds of a tavern are rooms for guests, and a bed a player sleeps in as the point of return is nobody's home: a citizen living there goes to find another. A broken bed, or a bed on land given up, frees its resident, who looks for a new one.
 
 ### Why nobody comes
 

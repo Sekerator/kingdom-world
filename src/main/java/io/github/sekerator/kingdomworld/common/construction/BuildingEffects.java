@@ -69,8 +69,6 @@ public final class BuildingEffects {
     private static Map<UUID, List<Effect>> effects = Map.of();
     /** Where the buildings of each kingdom stand, in the order of their effects. */
     private static Map<UUID, BuildingIndex> indexes = Map.of();
-    /** Working houses of each kingdom. */
-    private static Map<UUID, Integer> workingHouses = new HashMap<>();
     /** Every building in turn, for the states worked out again a few a tick. */
     private static List<Slot> slots = List.of();
     /** The place of every building among the effects. */
@@ -104,7 +102,6 @@ public final class BuildingEffects {
     public static void reset() {
         effects = Map.of();
         indexes = Map.of();
-        workingHouses = new HashMap<>();
         slots = List.of();
         slotById = Map.of();
         cursor = 0;
@@ -194,11 +191,6 @@ public final class BuildingEffects {
         Effect fresh = effect(server, state, now.get(), threshold);
         list.set(slot.index(), fresh);
         changes++;
-        boolean was = old.works() && BuildingRoles.HOUSE.equals(old.building().role());
-        boolean is = fresh.works() && BuildingRoles.HOUSE.equals(fresh.building().role());
-        if (was != is) {
-            workingHouses.merge(slot.kingdomId(), is ? 1 : -1, Integer::sum);
-        }
     }
 
     // ---------------------------------------------------------------- states
@@ -253,7 +245,6 @@ public final class BuildingEffects {
         KingdomWorldState state = KingdomWorldApi.state(server);
         int threshold = ConstructionSettings.buildings().roleThreshold();
         Map<UUID, List<Effect>> result = new HashMap<>();
-        Map<UUID, Integer> houses = new HashMap<>();
         List<Slot> order = new ArrayList<>();
         Map<Long, Slot> byId = new HashMap<>();
         for (Building building : state.construction().buildings()) {
@@ -263,9 +254,6 @@ public final class BuildingEffects {
             order.add(slot);
             byId.put(building.id(), slot);
             list.add(effect);
-            if (effect.works() && BuildingRoles.HOUSE.equals(building.role())) {
-                houses.merge(building.kingdomId(), 1, Integer::sum);
-            }
         }
         Map<UUID, BuildingIndex> made = new HashMap<>();
         for (Map.Entry<UUID, List<Effect>> kingdom : result.entrySet()) {
@@ -280,7 +268,6 @@ public final class BuildingEffects {
         effects = result;
         changes++;
         indexes = made;
-        workingHouses = houses;
         slots = order;
         slotById = byId;
         cursor = cursor >= order.size() ? 0 : cursor;
@@ -406,9 +393,8 @@ public final class BuildingEffects {
     /**
      * Whether a bed may become the home of a citizen. Never a bed of a tavern (the rooms of guests) or a bed a player sleeps
      * in as their point of return. A bed inside a building of the register may, unless the role of the building rests (a
-     * house, a barracks or a tower of mages that works, or a building without a role). A bed outside every building may only
-     * while the kingdom has no working house yet: a new kingdom gets its first citizens, and so its builders, from such beds.
-     * Citizens who already live in a bed outside a building keep it.
+     * house, a barracks or a tower of mages that works, or a building without a role). A bed outside every building may too,
+     * whatever houses the kingdom has: a player builds homes by hand as well; a free bed in a working house is taken first.
      */
     public static boolean bedUsable(MinecraftServer server, UUID kingdomId, WorldPos bed) {
         if (io.github.sekerator.kingdomworld.common.life.LifeWork.playerBed(server, bed)) {
@@ -416,14 +402,13 @@ public final class BuildingEffects {
         }
         List<Effect> holders = holding(server, kingdomId, bed);
         Effect holder = holders.isEmpty() ? null : holders.get(holders.size() - 1);
-        boolean anyHouse = workingHouses.getOrDefault(kingdomId, 0) > 0;
         if (holder != null) {
             if (BuildingRoles.TAVERN.equals(holder.building().role())) {
                 return false;
             }
             return holder.works() || holder.status() == BuildingRoles.Status.NONE;
         }
-        return !anyHouse;
+        return true;
     }
 
     /**

@@ -4,6 +4,7 @@
 
 ### 1.6.4
 
+- **Исправлено: новые кровати не годились после первого дома.** Как только у королевства заработал первый дом, кровати вне зданий реестра (в том числе в домах, построенных вручную) больше не становились жильём, и новые жители не приходили. Теперь любая кровать на земле королевства остаётся жильём; свободные кровати домов жители по-прежнему занимают первыми, а кровати таверны и кровать, в которой спит игрок, жильём не бывают.
 - **Исправлено: ворота закрыты после перезапуска.** Ворота, прорезанные в стене там, где часть их места не была загружена, ждали загрузки только до перезапуска сервера: после него блоки стены оставались в воротах. Теперь стена помнит такие ворота в сохранении и открывает их, когда их место загрузится.
 - **Исправлено: сделки между королевствами мира.** Регулярную сделку двух королевств мира оба правителя проверяли по общему счёту: неудачный ход одного и такой же ход другого отменяли сделку сразу, а удачный ход одного стирал неудачу другого. Теперь каждый правитель считает свои ходы сам и отменяет невыгодную сделку после двух своих ходов подряд, как задумано; счёт сделки, которая закончилась, забывается.
 
@@ -395,6 +396,7 @@
 
 ### 1.6.4
 
+- **Fixed: new beds did not count after the first house.** Once the first house of a kingdom worked, beds outside the registered buildings (in houses built by hand among them) no longer became homes, and no new citizens came. Now any bed on the land of the kingdom stays a home; citizens still take the free beds of houses first, and the beds of a tavern and the bed a player sleeps in are never homes.
 - **Fixed: gates shut after a restart.** A gate cut into a wall where a part of its place was not loaded waited for it only until the server restarted: after that the blocks of the wall stayed in the gate. Now the wall keeps such gates in its saved data and opens them once their place is loaded.
 - **Fixed: deals between kingdoms of the world.** Both rulers of a regular deal between two kingdoms of the world checked it on one count: a bad turn of one and one of the other called it off at once, and a good turn of one wiped out the bad one of the other. Now each ruler counts its own turns and calls off a deal that no longer pays after two of its turns in a row, as meant; the count of a deal that ended is forgotten.
 

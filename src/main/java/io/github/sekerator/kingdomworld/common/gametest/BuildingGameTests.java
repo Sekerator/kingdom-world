@@ -175,6 +175,7 @@ public final class BuildingGameTests {
                 List.of("minecraft:red_bed[facing=north,part=foot,occupied=false]", "minecraft:red_bed[facing=north,part=head,occupied=false]"),
                 new int[][]{{0, 2, 0}, {0, 1, 1}});
         Citizen citizen = null;
+        Citizen second = null;
         try {
             Building building = build(helper, kingdom, house, new BlockPos(6, 0, 6));
             helper.assertTrue(BuildingRoles.HOUSE.equals(building.role()) && building.level() == 1, "The house has no role: " + building.role());
@@ -189,9 +190,27 @@ public final class BuildingGameTests {
             int comfort = BuildingEffects.comfort(server, kingdom.id(), home);
             helper.assertTrue(comfort == (int) Math.round(effect.param(BuildingRoles.COMFORT)) && comfort > 0, "No comfort at home: " + comfort);
             helper.assertTrue(BuildingEffects.freeBeds(server, kingdom.id())[0] == 0, "The bed is still free");
+            // A bed a player put outside every building is a home as well, the house working or not: the next newcomer gets it.
+            BlockPos head = helper.absolutePos(new BlockPos(1, 0, 10));
+            net.minecraft.world.level.block.state.BlockState bed = net.minecraft.world.level.block.Blocks.BLUE_BED.defaultBlockState()
+                    .setValue(net.minecraft.world.level.block.BedBlock.FACING, net.minecraft.core.Direction.NORTH);
+            level.setBlock(head.south(), bed.setValue(net.minecraft.world.level.block.BedBlock.PART,
+                    net.minecraft.world.level.block.state.properties.BedPart.FOOT), 3);
+            level.setBlock(head, bed.setValue(net.minecraft.world.level.block.BedBlock.PART,
+                    net.minecraft.world.level.block.state.properties.BedPart.HEAD), 3);
+            WorldPos outside = new WorldPos(io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level), head.getX(), head.getY(), head.getZ());
+            KingdomWorldApi.state(server).citizens().addSite(outside, io.github.sekerator.kingdomworld.core.citizen.SiteKinds.BED, kingdom.id());
+            int[] free = BuildingEffects.freeBeds(server, kingdom.id());
+            helper.assertTrue(free[0] == 1 && free[1] == 0, "The bed outside the buildings is not offered beside a working house: "
+                    + java.util.Arrays.toString(free));
+            second = CitizenGameTests.newcomer(helper, kingdom, 2, 2);
+            CitizenSimulation.step(server, kingdom.id());
+            helper.assertTrue(outside.equals(KingdomWorldApi.state(server).citizens().get(second.id()).orElseThrow().home()),
+                    "The next newcomer does not live in the bed outside the buildings: "
+                            + KingdomWorldApi.state(server).citizens().get(second.id()).orElseThrow().home());
         } finally {
             if (citizen != null) {
-                CitizenGameTests.finish(helper, kingdom, citizen);
+                CitizenGameTests.finish(helper, kingdom, second == null ? new Citizen[]{citizen} : new Citizen[]{citizen, second});
             }
             end(helper, kingdom, area[0], area[1], house.id());
         }

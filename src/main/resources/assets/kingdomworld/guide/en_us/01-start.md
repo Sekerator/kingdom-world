@@ -67,7 +67,7 @@ Craft a **Storehouse** {item:kingdomworld:storehouse} and place it on your land:
 
 ### 5. Beds
 
-Place beds on your land, one for every future citizen: a bed is a home. While the kingdom has no houses any bed on its land will do; later citizens live in buildings.
+Place beds on your land, one for every future citizen: a bed is a home. Any bed on the kingdom's land will do, in a house you built yourself too; citizens take the free beds of houses first.
 
 ### 6. The first citizens
 
